@@ -1,7 +1,7 @@
-version: "3.9"
 services:
   bot:
     build: .
+    image: slack-bot:local
     container_name: slack-bot
     depends_on:
       - db
@@ -26,8 +26,7 @@ services:
       SLACK_ADMIN_ID: ${SLACK_ADMIN_ID}
       SLACK_ADMIN_NAME: ${SLACK_ADMIN_NAME}
     volumes:
-      - ./db/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./db/02-insert-slack-admin.sh:/docker-entrypoint-initdb.d/02-insert-slack-admin.sh:ro
+      - ./db:/docker-entrypoint-initdb.d:ro
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"

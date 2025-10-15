@@ -7,6 +7,11 @@ SLACK_ADMIN_NAME=""
 # Postgres
 POSTGRES_DB=""
 POSTGRES_PASSWORD=""
-POSTGRES_HOST=""   # "db" = Docker Compose service name
+POSTGRES_HOST=""
+# "db" = Docker Compose service name
 POSTGRES_USER=""
 POSTGRES_PORT=""
+
+# Optional: external DB
+EXTERNAL_POSTGRES_HOST=
+EXTERNAL_POSTGRES_PORT=
