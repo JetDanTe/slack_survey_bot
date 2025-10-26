@@ -1,18 +1,18 @@
 from slack_bolt import App
-from db import database_init
-from audit import AuditSession
+from app.audit import AuditSession
 from slack_sdk.errors import SlackApiError
-from custom_exceptions import EnvironmentVarException
+from app.custom_exceptions import EnvironmentVarException
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 import os
 import typing as tp
+from app.infrastructure.db.manager import DatabaseManager
 
 class AuditBot:
 
     _token_vars = ('SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN')
 
     def __init__(self, debug=False):
-        self.database_manager = database_init()
+        self.database_manager = DatabaseManager()
         self.__check_tokens()
         self.debug = debug
         self.app = App(token=self.SLACK_BOT_TOKEN)
@@ -204,8 +204,7 @@ class AuditBot:
         else:
 
             users_to_show = self.database_manager.get_users(
-                command_name,
-                None if not self.audit_session else self.audit_session.table_name
+                command_name
             )
             if isinstance(users_to_show, str):
                 say(users_to_show)

@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 import typing as tp
 
-from db import DataBaseManager
+from app.infrastructure.db.manager import DatabaseManager
 
 
 class TimeFormatter:
@@ -69,7 +69,7 @@ class AuditSession:
             self,
             table_name: str,
             send_message: tp.Callable[[str, str], None],
-            database_manager: DataBaseManager,
+            database_manager: DatabaseManager,
             reminder: tp.Optional[str] = None
     ):
         """

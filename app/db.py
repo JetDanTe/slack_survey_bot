@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine, Column, String, Boolean, MetaData, Table, insert, select
 from sqlalchemy.orm import declarative_base, sessionmaker
+from infrastructure.db.manager import DatabaseManager
 from custom_exceptions import EnvironmentVarException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import exists
@@ -274,7 +275,7 @@ class DataBaseManager:
         return self.Session().query(exists().where(self.User.id == data.get('id'))).scalar()
 
 
-def database_init() -> DataBaseManager:
+def database_init() -> DatabaseManager:
     """
     Initialize database configuration and manager.
 
@@ -282,6 +283,6 @@ def database_init() -> DataBaseManager:
     """
     config = DatabaseConfig.validate_environment()
     database_url = DatabaseConfig.get_database_url(config)
-    return DataBaseManager(database_url)
+    return DatabaseManager()
 
 
