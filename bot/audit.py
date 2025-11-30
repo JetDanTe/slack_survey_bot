@@ -3,6 +3,7 @@ import time
 import datetime
 import pandas as pd
 import typing as tp
+from buttons import answer_btn
 
 from db import DataBaseManager
 
@@ -20,11 +21,7 @@ class TimeFormatter:
             number = int(time_str[:-1])
             unit = time_str[-1]
 
-            time_units = {
-                'h': 3600,
-                'm': 60,
-                's': 1
-            }
+            time_units = {"h": 3600, "m": 60, "s": 1}
 
             return number * time_units.get(unit, 3600)
         except (ValueError, KeyError):
@@ -53,7 +50,7 @@ class AuditStorage:
         :return: Path to the saved Excel file
         """
         file_name = os.path.join(audits_folder, f"{table_name}.xlsx")
-        columns = ['Name', 'Answer']
+        columns = ["Name", "Answer"]
         data = [(tuple(row)[1], tuple(row)[2]) for row in table]
         df = pd.DataFrame(data, columns=columns)
         df.to_excel(file_name, index=False)
@@ -61,16 +58,16 @@ class AuditStorage:
 
 
 class AuditSession:
-    DEFAULT_AUDITS_FOLDER = 'audit_files'
-    DEFAULT_REMINDER_TIME = '2h'
+    DEFAULT_AUDITS_FOLDER = "audit_files"
+    DEFAULT_REMINDER_TIME = "2h"
     DEFAULT_REMINDER_MESSAGE = "Kindly reminder!:arrow-up:"
 
     def __init__(
-            self,
-            table_name: str,
-            send_message: tp.Callable[[str, str], None],
-            database_manager: DataBaseManager,
-            reminder: tp.Optional[str] = None
+        self,
+        table_name: str,
+        send_message: tp.Callable[[str, str, list], None],
+        database_manager: DataBaseManager,
+        reminder: tp.Optional[str] = None,
     ):
         """
         Initialize an audit session.
@@ -85,7 +82,9 @@ class AuditSession:
         self._admins = None
 
         self.table_name = f"{table_name}_{datetime.datetime.now().strftime('%d%m%Y')}"
-        self.reminder_time = TimeFormatter.format_time(reminder or self.DEFAULT_REMINDER_TIME)
+        self.reminder_time = TimeFormatter.format_time(
+            reminder or self.DEFAULT_REMINDER_TIME
+        )
 
         self._send_message = send_message
         self._database_manager = database_manager
@@ -125,7 +124,11 @@ class AuditSession:
         while self._is_active:
             target_users = self._get_target_users()
             for user_id in target_users:
-                self._send_message(user_id, initial_message)
+                self._send_message(
+                    user_id,
+                    initial_message,
+                    blocks=answer_btn(initial_message, user_id),
+                )
 
             initial_message = self.DEFAULT_REMINDER_MESSAGE
             time.sleep(self.reminder_time)
@@ -136,7 +139,9 @@ class AuditSession:
 
         :return: List of user IDs
         """
-        target_users = self._database_manager.get_users('/audit_unanswered', self.table_name)
+        target_users = self._database_manager.get_users(
+            "/audit_unanswered", self.table_name
+        )
         return [user.id for user in target_users]
 
     def add_response(self, data: tp.Dict) -> None:
@@ -155,7 +160,5 @@ class AuditSession:
         """
         table = self._database_manager.select_table(self.table_name)
         return AuditStorage.save_audit_summary(
-            table,
-            self.table_name,
-            self.DEFAULT_AUDITS_FOLDER
+            table, self.table_name, self.DEFAULT_AUDITS_FOLDER
         )

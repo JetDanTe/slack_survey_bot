@@ -4,12 +4,14 @@ from audit import AuditSession
 from slack_sdk.errors import SlackApiError
 from custom_exceptions import EnvironmentVarException
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+from modal_windows import answer_modal
 import os
 import typing as tp
 
+
 class AuditBot:
 
-    _token_vars = ('SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN')
+    _token_vars = ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN")
 
     def __init__(self, debug=False):
         self.database_manager = database_init()
@@ -17,7 +19,9 @@ class AuditBot:
         self.debug = debug
         self.app = App(token=self.SLACK_BOT_TOKEN)
         self.audit_session = None
-        self.admins = [user.id for user in self.database_manager.get_users('/admin_show')]
+        self.admins = [
+            user.id for user in self.database_manager.get_users("/admin_show")
+        ]
         # for future setup where audit name will be set from bot
         self.audit_name = "user_location"  # will be None
 
@@ -42,11 +46,15 @@ class AuditBot:
         self.app.command("/audits_show")(self.admin_check(self.not_implemented))
         self.app.command("/audit_get")(self.admin_check(self.not_implemented))
 
+        # Buttons handlers
+        self.app.action("open_answer_modal")(self.open_answer_modal)
+        self.app.view("answer_modal_view")(self.handle_answer_modal_submit)
+
         # Socket mode handler to connect the bot to Slack
         self.handler = SocketModeHandler(self.app, self.SLACK_APP_TOKEN)
 
     def __check_tokens(self):
-        """ Check if slack token vars exist in the system """
+        """Check if slack token vars exist in the system"""
         for var in self._token_vars:
             if not var in os.environ:
                 raise EnvironmentVarException(f'The var "{var} is absent"')
@@ -54,7 +62,8 @@ class AuditBot:
                 exec(f"self.{var} = '{os.environ[var]}'")
 
     def admin_check(self, func):
-        """ Decorator to check if the command is issued by an admin."""
+        """Decorator to check if the command is issued by an admin."""
+
         def wrapper(ack, body, say, *args, **kwargs):
             ack()
             user_id = body["user_id"]
@@ -62,63 +71,70 @@ class AuditBot:
                 say("You are not authorized to perform this action.")
                 return
             return func(ack, body, say, *args, **kwargs)
+
         return wrapper
 
     def not_implemented(self, ack, body, say):
-        """ Plug for handling uncreated commands"""
+        """Plug for handling uncreated commands"""
         ack()
         say("Command not implemented, yet.")
 
     def start_audit(self, ack, body, say):
-        """ Audit process main function"""
+        """Audit process main function"""
         audit_message = body.get("text")
         say(f"Users will receive next message: \n{audit_message}")
         ack()  # Acknowledge the command
         if self.audit_session is not True:
-            self.audit_session = AuditSession(self.audit_name, self.send_message, self.database_manager)
+            self.audit_session = AuditSession(
+                self.audit_name, self.send_message, self.database_manager
+            )
             self.audit_session.open_session(audit_message)
         else:
             say("There is already an active audit session.")
 
-    def send_message(self, user_id, message):
-        """ Alarm. Danger. This func can send messages to real people in your workspace. """
+    def send_message(self, user_id, message, blocks=None):
+        """Alarm. Danger. This func can send messages to real people in your workspace."""
         if not self.debug:
             try:
                 response = self.app.client.conversations_open(users=user_id)
                 dm_channel_id = response["channel"]["id"]
 
                 self.app.client.chat_postMessage(
-                    channel=dm_channel_id,
-                    text=message
+                    channel=dm_channel_id, text=message, blocks=blocks
                 )
             except SlackApiError as e:
                 print(f"Error sending message: {e.response['error']}")
         else:
-            print(f'Message sending initialized. Message not sent - Debug "{self.debug}"')
-
+            print(
+                f'Message sending initialized. Message not sent - Debug "{self.debug}"'
+            )
 
     def collect_answer(self, ack, body, say):
         """Takes the user's answer and puts it into the database"""
         ack()
         data = {
-            'id': body['user_id'],
-            'name': body.get('user_name'),
-            'answer': body['text']
+            "id": body["user_id"],
+            "name": body.get("user_name"),
+            "answer": body["text"],
         }
         if not self.audit_session:
-            say("There is no active audit session. Please wait until an audit is started.")
+            say(
+                "There is no active audit session. Please wait until an audit is started."
+            )
         else:
             # existed_answer = self.database_manager.check_if_answer_exist(data)
             # if not existed_answer:
             self.audit_session.add_response(data)
-            say(f"Thank you <@{body['user_id']}>! Your response '{body['text']}' has been recorded.")
-            #else:
+            say(
+                f"Thank you <@{body['user_id']}>! Your response '{body['text']}' has been recorded."
+            )
+            # else:
             #    say("You already answered.")
 
     def close_audit(self, ack, body, say):
-        """ Close audit and return audit report .xlsx file """
+        """Close audit and return audit report .xlsx file"""
         ack()  # Acknowledge the command
-        channel_id = body.get('channel_id')
+        channel_id = body.get("channel_id")
         if self.audit_session is not None:
             self.audit_session.close_session()
             audit_summary = self.audit_session.get_audit_summary()
@@ -132,8 +148,8 @@ class AuditBot:
             say("There is no active audit session to close.")
 
     def update_users(self, ack, body, say):
-        """ Gather user data from Slack. Update slack user status if_delete and add new users. """
-        users = self.app.client.users_list()['members']
+        """Gather user data from Slack. Update slack user status if_delete and add new users."""
+        users = self.app.client.users_list()["members"]
         self.database_manager.update_users(users)
         say("Users updated")
 
@@ -143,15 +159,9 @@ class AuditBot:
         :param users: Str
         :return: List of dicts
         """
-        users = users.split(' ')
+        users = users.split(" ")
         formatted_users = [
-            {
-                'id': None,
-                'name': user.replace('@', ''),
-                'profile': {
-                    'real_name': None
-                }
-            }
+            {"id": None, "name": user.replace("@", ""), "profile": {"real_name": None}}
             for user in users
         ]
         return formatted_users
@@ -165,68 +175,102 @@ class AuditBot:
         :return: List of not found users
         :raises ValueError: If invalid update_type provided
         """
-        if update_type not in ['admin', 'ignore']:
+        if update_type not in ["admin", "ignore"]:
             raise ValueError("update_type must be either 'admin' or 'ignore'")
 
-        text = f'{update_type.title()} list updated'
-        users = self._format_user_list(body.get('text'))
-        not_found_users = self.database_manager.update_users(users,
-                                                             to_ignore=(update_type == 'ignore'),
-                                                             to_admin=(update_type == 'admin'),
-                                                             by_name=True)
+        text = f"{update_type.title()} list updated"
+        users = self._format_user_list(body.get("text"))
+        not_found_users = self.database_manager.update_users(
+            users,
+            to_ignore=(update_type == "ignore"),
+            to_admin=(update_type == "admin"),
+            by_name=True,
+        )
         if not_found_users:
             text += f"\nCould not find the following users: {', '.join(user.get('name')for user in not_found_users)}"
         return text
 
     def update_ignore(self, ack, body, say):
-        """ Update list of users which audit can ignore """
+        """Update list of users which audit can ignore"""
         ack()
-        result = self._handle_list_of_users(body, 'ignore')
+        result = self._handle_list_of_users(body, "ignore")
         say(result)
 
     def update_admin(self, ack, body, say):
-        """ Set column is_admin to True in the database """
+        """Set column is_admin to True in the database"""
         ack()
-        result = self._handle_list_of_users(body, 'admin')
+        result = self._handle_list_of_users(body, "admin")
         say(result)
 
     def show_users(self, ack, body, say):
-        """ Universal command to show a list of users. Depends on which command is triggered."""
+        """Universal command to show a list of users. Depends on which command is triggered."""
         ack()
         command_mapping = {
             "/ignore_show": "Ignored users:",
             "/admin_show": "Admin users:",
             "/audit_unanswered": "Audit unanswered:",
         }
-        command_name = body.get('command')
+        command_name = body.get("command")
         if not self.audit_session and command_name == "/audit_unanswered":
             say("There is no active audit session")
         else:
 
             users_to_show = self.database_manager.get_users(
                 command_name,
-                None if not self.audit_session else self.audit_session.table_name
+                None if not self.audit_session else self.audit_session.table_name,
             )
             if isinstance(users_to_show, str):
                 say(users_to_show)
             else:
-                users_to_show = '\n'.join(f'<@{user.id}>' for user in users_to_show)
+                users_to_show = "\n".join(f"<@{user.id}>" for user in users_to_show)
                 text = f"{command_mapping.get(command_name, 'Users:')}\n{users_to_show}"
                 say(text)
 
     def show_user_help(self, ack, body, say):
-        """ Return to user string with help information """
+        """Return to user string with help information"""
         ack()
-        say(f'Use next command to answer:\n /answer <your_location>\n'
-            f'For example:\n /answer Paris')
+        say(
+            f"Use next command to answer:\n /answer <your_location>\n"
+            f"For example:\n /answer Paris"
+        )
 
     def shadow_answer(self, ack, body, say):
-        """ Trigger on any not slash command messages """
+        """Trigger on any not slash command messages"""
         ack()
-        say(text='Sorry, do not understand. Use /help command or ask manager.',
-            channel=body.get('event').get('channel'),
-            thread_ts=body.get('event').get('ts'))
+        say(
+            text="Sorry, do not understand. Use /help command or ask manager.",
+            channel=body.get("event").get("channel"),
+            thread_ts=body.get("event").get("ts"),
+        )
 
     def start(self):
-        """ Connects to Slack in socket mode"""
+        """Connects to Slack in socket mode"""
         self.handler.start()
+
+    def open_answer_modal(self, ack, body, client):
+        ack()
+        trigger_id = body["trigger_id"]
+        user_id = body["user"]["id"]
+
+        client.views_open(trigger_id=trigger_id, view=answer_modal(user_id))
+
+    def handle_answer_modal_submit(self, ack, body, client, say=None):
+        ack()
+
+        user_id = body["user"]["id"]
+        answer = body["view"]["state"]["values"]["answer_block"]["answer_input"][
+            "value"
+        ]
+        name = body["user"]["name"]
+
+        data = {"id": user_id, "name": name, "answer": answer}
+
+        if not self.audit_session:
+            client.chat_postMessage(channel=user_id, text="No active audit session")
+            return
+
+        self.audit_session.add_response(data)
+
+        client.chat_postMessage(
+            channel=user_id, text=f'Thanks! Your answer "*{answer}*" saved.'
+        )
