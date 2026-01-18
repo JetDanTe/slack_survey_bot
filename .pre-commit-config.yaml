@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.11
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        exclude: migrations/
+      - id: ruff-format
+        exclude: ^migrations/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+    - id: isort
+      args: ["--profile", "black"]
+      types: [python]
+      exclude: ^migrations/
