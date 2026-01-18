@@ -1,17 +1,34 @@
-from sqlalchemy import create_engine, Column, String, Boolean, MetaData, Table, insert, select
-from sqlalchemy.orm import declarative_base, sessionmaker
-from custom_exceptions import EnvironmentVarException
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.sql import exists
-import typing as tp
 import os
+import typing as tp
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    insert,
+    select,
+)
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.sql import exists
+
+from bot.custom_exceptions import EnvironmentVarException
 
 
 class DatabaseConfig:
     """
     Manage database configuration and connection setup.
     """
-    REQUIRED_VARS = ('POSTGRES_HOST', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB')
+
+    REQUIRED_VARS = (
+        "POSTGRES_HOST",
+        "POSTGRES_USER",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_DB",
+    )
 
     @classmethod
     def validate_environment(cls) -> tp.Dict[str, str]:
@@ -26,7 +43,9 @@ class DatabaseConfig:
             value = os.environ.get(env_var)
             print(f"{env_var}: {value}")
             if not value:
-                raise EnvironmentVarException(f'Environment variable "{env_var}" is missing or empty')
+                raise EnvironmentVarException(
+                    f'Environment variable "{env_var}" is missing or empty'
+                )
             config[env_var] = value
         return config
 
@@ -39,10 +58,10 @@ class DatabaseConfig:
         :return: SQLAlchemy database connection URL
         """
         return (
-            f'postgresql://{config["POSTGRES_USER"]}:'
-            f'{config["POSTGRES_PASSWORD"]}@'
-            f'{config["POSTGRES_HOST"]}/'
-            f'{config["POSTGRES_DB"]}'
+            f"postgresql://{config['POSTGRES_USER']}:"
+            f"{config['POSTGRES_PASSWORD']}@"
+            f"{config['POSTGRES_HOST']}/"
+            f"{config['POSTGRES_DB']}"
         )
 
 
@@ -65,7 +84,8 @@ class DataBaseManager:
         """
         User model representing the users table.
         """
-        __tablename__ = 'users'
+
+        __tablename__ = "users"
 
         id = Column(String, primary_key=True, nullable=False)
         name = Column(String, nullable=False)
@@ -91,19 +111,20 @@ class DataBaseManager:
         """
         metadata = MetaData()
         audit_table = Table(
-            audit_name, metadata,
-            Column('id', String, primary_key=True, nullable=False),
-            Column('name', String, nullable=False),
-            Column('answer', String, nullable=False)
+            audit_name,
+            metadata,
+            Column("id", String, primary_key=True, nullable=False),
+            Column("name", String, nullable=False),
+            Column("answer", String, nullable=False),
         )
         audit_table.create(self.engine)
 
     def update_users(
-            self,
-            users: tp.List[tp.Dict],
-            to_admin: bool = False,
-            to_ignore: bool = False,
-            by_name: bool = False,
+        self,
+        users: tp.List[tp.Dict],
+        to_admin: bool = False,
+        to_ignore: bool = False,
+        by_name: bool = False,
     ) -> tp.List[str]:
         """
         Update user information in the database.
@@ -121,24 +142,22 @@ class DataBaseManager:
                 for user in users:
                     if by_name:
                         not_found_users.extend(
-                            self._update_user_by_name(session, user, to_admin, to_ignore)
+                            self._update_user_by_name(
+                                session, user, to_admin, to_ignore
+                            )
                         )
                     else:
                         not_found_users.extend(
                             self._update_or_create_user(session, user)
                         )
                 session.commit()
-            except SQLAlchemyError as e:
+            except SQLAlchemyError:
                 session.rollback()
                 raise
         return not_found_users
 
     def _update_user_by_name(
-            self,
-            session,
-            user: dict,
-            to_admin: bool,
-            to_ignore: bool
+        self, session, user: dict, to_admin: bool, to_ignore: bool
     ) -> tp.List[tp.Dict]:
         """
         Update user status by username.
@@ -150,7 +169,9 @@ class DataBaseManager:
         :return: List of not found users
         """
         not_found_users = []
-        existing_user = session.query(self.User).filter_by(name=user.get('name')).first()
+        existing_user = (
+            session.query(self.User).filter_by(name=user.get("name")).first()
+        )
 
         if existing_user:
             if to_ignore:
@@ -162,11 +183,7 @@ class DataBaseManager:
 
         return not_found_users
 
-    def _update_or_create_user(
-            self,
-            session,
-            user: tp.Dict
-    ) -> tp.List[str]:
+    def _update_or_create_user(self, session, user: tp.Dict) -> tp.List[str]:
         """
         Update existing user or create new user.
 
@@ -174,14 +191,14 @@ class DataBaseManager:
         :param user: User data dictionary
         :return: List of not found users
         """
-        if user.get('is_bot') or user.get('id') == 'USLACKBOT':
+        if user.get("is_bot") or user.get("id") == "USLACKBOT":
             return []
 
         new_db_user = self.User(
-            id=user.get('id'),
-            name=user.get('name'),
-            real_name=user.get('profile', {}).get('real_name', ''),
-            is_deleted=user.get('deleted', False)
+            id=user.get("id"),
+            name=user.get("name"),
+            real_name=user.get("profile", {}).get("real_name", ""),
+            is_deleted=user.get("deleted", False),
         )
 
         existing_user = session.query(self.User).filter_by(id=new_db_user.id).first()
@@ -189,16 +206,16 @@ class DataBaseManager:
         if existing_user:
             if existing_user.is_deleted != new_db_user.is_deleted:
                 existing_user.is_deleted = new_db_user.is_deleted
-                print(f"User '{new_db_user.name}' found. Updating is_deleted to {new_db_user.is_deleted}.")
+                print(
+                    f"User '{new_db_user.name}' found. Updating is_deleted to {new_db_user.is_deleted}."
+                )
         else:
             session.add(new_db_user)
 
         return []
 
     def get_users(
-            self,
-            command_name: str,
-            second_table: str = None
+        self, command_name: str, second_table: str = None
     ) -> tp.Union[tp.List[tp.Type[User]], str]:
         """
         Retrieve users based on different criteria.
@@ -209,16 +226,16 @@ class DataBaseManager:
         """
         second_table = self.check_table_exists(second_table)
         with self.Session() as session:
-            if command_name == '/ignore_show':
+            if command_name == "/ignore_show":
                 return session.query(self.User).filter_by(is_ignore=True).all()
 
-            elif command_name == '/admin_show':
+            elif command_name == "/admin_show":
                 return session.query(self.User).filter_by(is_admin=True).all()
 
             # elif command_name == '/audit_stop':
             #     return session.query(second_table)
 
-            elif command_name == '/audit_unanswered':
+            elif command_name == "/audit_unanswered":
                 return (
                     session.query(self.User)
                     .filter_by(is_deleted=False)
@@ -271,7 +288,11 @@ class DataBaseManager:
         :para data: Dict with answer data: user, id, answer
         :return Bool: True or False if answer exist
         """
-        return self.Session().query(exists().where(self.User.id == data.get('id'))).scalar()
+        return (
+            self.Session()
+            .query(exists().where(self.User.id == data.get("id")))
+            .scalar()
+        )
 
 
 def database_init() -> DataBaseManager:
@@ -283,5 +304,3 @@ def database_init() -> DataBaseManager:
     config = DatabaseConfig.validate_environment()
     database_url = DatabaseConfig.get_database_url(config)
     return DataBaseManager(database_url)
-
-
