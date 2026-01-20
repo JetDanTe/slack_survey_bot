@@ -1,0 +1,22 @@
+[project]
+name = "slack_survey_bot"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Dante",email = "master.neo16@gmail.com"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "slack-bolt (>=1.27.0,<2.0.0)",
+    "sqlalchemy (>=2.0.45,<3.0.0)",
+    "asyncpg (>=0.31.0,<0.32.0)",
+    "psycopg2-binary (>=2.9.11,<3.0.0)",
+    "alembic (>=1.17.2,<2.0.0)",
+    "pandas (>=2.3.3,<3.0.0)",
+    "openpyxl (>=3.1.5,<4.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

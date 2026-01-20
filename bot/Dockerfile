@@ -1,16 +1,18 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/* \
-
 WORKDIR /app
 
-COPY doc/requirements.txt .
+ENV POETRY_NO_INTERACTION=1
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends make \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY bot/ .
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir poetry \
+    && poetry config virtualenvs.create false
 
-CMD ["python", "main.py"]
+COPY pyproject.toml poetry.lock /app/
+RUN poetry install --no-ansi --no-root --no-interaction
+
+COPY . /app
