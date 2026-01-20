@@ -1,6 +1,7 @@
 import os
 import typing as tp
 
+from custom_exceptions import EnvironmentVarException
 from sqlalchemy import (
     Boolean,
     Column,
@@ -14,8 +15,6 @@ from sqlalchemy import (
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.sql import exists
-
-from bot.custom_exceptions import EnvironmentVarException
 
 
 class DatabaseConfig:
