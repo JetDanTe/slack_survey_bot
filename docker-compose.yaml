@@ -3,7 +3,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: ./bot
-    restart: always
+    restart: on-failure:3
     env_file:
       - .env
     volumes:

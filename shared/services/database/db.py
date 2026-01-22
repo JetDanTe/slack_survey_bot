@@ -1,7 +1,5 @@
-import os
 import typing as tp
 
-from custom_exceptions import EnvironmentVarException
 from sqlalchemy import (
     Boolean,
     Column,
@@ -16,52 +14,51 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.sql import exists
 
-
-class DatabaseConfig:
-    """
-    Manage database configuration and connection setup.
-    """
-
-    REQUIRED_VARS = (
-        "POSTGRES_HOST",
-        "POSTGRES_USER",
-        "POSTGRES_PASSWORD",
-        "POSTGRES_DB",
-    )
-
-    @classmethod
-    def validate_environment(cls) -> tp.Dict[str, str]:
-        """
-        Validate and retrieve database environment variables.
-
-        :return: Dictionary of database configuration variables
-        :raises EnvironmentVarException: If variables are missing or empty
-        """
-        config = {}
-        for env_var in cls.REQUIRED_VARS:
-            value = os.environ.get(env_var)
-            print(f"{env_var}: {value}")
-            if not value:
-                raise EnvironmentVarException(
-                    f'Environment variable "{env_var}" is missing or empty'
-                )
-            config[env_var] = value
-        return config
-
-    @classmethod
-    def get_database_url(cls, config: tp.Dict[str, str]) -> str:
-        """
-        Generate database URL from configuration.
-
-        :param config: Database configuration dictionary
-        :return: SQLAlchemy database connection URL
-        """
-        return (
-            f"postgresql://{config['POSTGRES_USER']}:"
-            f"{config['POSTGRES_PASSWORD']}@"
-            f"{config['POSTGRES_HOST']}/"
-            f"{config['POSTGRES_DB']}"
-        )
+# class DatabaseConfig:
+#     """
+#     Manage database configuration and connection setup.
+#     """
+#
+#     REQUIRED_VARS = (
+#         "POSTGRES_HOST",
+#         "POSTGRES_USER",
+#         "POSTGRES_PASSWORD",
+#         "POSTGRES_DB",
+#     )
+#
+#     @classmethod
+#     def validate_environment(cls) -> tp.Dict[str, str]:
+#         """
+#         Validate and retrieve database environment variables.
+#
+#         :return: Dictionary of database configuration variables
+#         :raises EnvironmentVarException: If variables are missing or empty
+#         """
+#         config = {}
+#         for env_var in cls.REQUIRED_VARS:
+#             value = os.environ.get(env_var)
+#             print(f"{env_var}: {value}")
+#             if not value:
+#                 raise EnvironmentVarException(
+#                     f'Environment variable "{env_var}" is missing or empty'
+#                 )
+#             config[env_var] = value
+#         return config
+#
+#     @classmethod
+#     def get_database_url(cls, config: tp.Dict[str, str]) -> str:
+#         """
+#         Generate database URL from configuration.
+#
+#         :param config: Database configuration dictionary
+#         :return: SQLAlchemy database connection URL
+#         """
+#         return (
+#             f"postgresql://{config['POSTGRES_USER']}:"
+#             f"{config['POSTGRES_PASSWORD']}@"
+#             f"{config['POSTGRES_HOST']}/"
+#             f"{config['POSTGRES_DB']}"
+#         )
 
 
 class DataBaseManager:
@@ -294,12 +291,10 @@ class DataBaseManager:
         )
 
 
-def database_init() -> DataBaseManager:
+def database_init(settings) -> DataBaseManager:
     """
     Initialize database configuration and manager.
 
     :return: Configured DatabaseManager instance
     """
-    config = DatabaseConfig.validate_environment()
-    database_url = DatabaseConfig.get_database_url(config)
-    return DataBaseManager(database_url)
+    return DataBaseManager(settings.DATABASE_URL)

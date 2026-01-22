@@ -13,11 +13,11 @@ from shared.services.survey.survey import AuditSession
 class AuditBot:
     _token_vars = ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN")
 
-    def __init__(self, debug=False):
-        self.database_manager = database_init()
+    def __init__(self, settings):
+        self.database_manager = database_init(settings)
         self.__check_tokens()
-        self.debug = debug
-        self.app = App(token=self.SLACK_BOT_TOKEN)
+        self.debug = settings.DEBUG
+        self.app = App(token=settings.SLACK_BOT_TOKEN)
         self.audit_session = None
         self.admins = [
             user.id for user in self.database_manager.get_users("/admin_show")
