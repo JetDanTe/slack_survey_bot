@@ -1,0 +1,23 @@
+services:
+  slack_survey_bot:
+    build:
+      dockerfile: Dockerfile
+      context: ./bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./bot:/app
+      - ./shared:/app/shared
+    command: |
+      sh -c "
+      python3 main.py
+      "
+    networks:
+      - main_network
+    environment:
+      - PYTHONUNBUFFERED=1
+
+networks:
+  main_network:
+    driver: bridge
