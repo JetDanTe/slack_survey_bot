@@ -19,9 +19,9 @@ class AuditBot:
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
         self.audit_session = None
-        self.admins = [
-            user.id for user in self.database_manager.get_users("/admin_show")
-        ]
+        # self.admins = [
+        #     user.id for user in self.database_manager.get_users("/admin_show")
+        # ]
         # for future setup where audit name will be set from bot
         self.audit_name = "user_location"  # will be None
 
