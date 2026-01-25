@@ -1,7 +1,9 @@
+import asyncio
 import os
 import typing as tp
 
 from custom_exceptions import EnvironmentVarException
+from services.admin_handler.main import AdminHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk.errors import SlackApiError
@@ -19,6 +21,7 @@ class AuditBot:
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
         self.audit_session = None
+        self.admins = asyncio.run(AdminHandler(settings).get_all_admins())
         # self.admins = [
         #     user.id for user in self.database_manager.get_users("/admin_show")
         # ]
