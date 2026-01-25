@@ -21,11 +21,8 @@ class AuditBot:
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
         self.audit_session = None
-        self.admins = asyncio.run(AdminHandler(settings).get_all_admins())
-        # self.admins = [
-        #     user.id for user in self.database_manager.get_users("/admin_show")
-        # ]
-        # for future setup where audit name will be set from bot
+        # Initialize admins
+        self.admins = asyncio.run(self.initialize_admins(settings))
         self.audit_name = "user_location"  # will be None
 
         # Define bot commands and event handlers
@@ -51,6 +48,14 @@ class AuditBot:
 
         # Socket mode handler to connect the bot to Slack
         self.handler = SocketModeHandler(self.app, self.SLACK_APP_TOKEN)
+
+    async def initialize_admins(self, settings) -> tp.List[str]:
+        """
+        Setup the first admin and fetch all admins.
+        """
+        handler = AdminHandler(settings)
+        await handler.setup_first_admin()
+        return await handler.get_all_admins()
 
     def __check_tokens(self):
         """Check if slack token vars exist in the system"""
@@ -208,6 +213,7 @@ class AuditBot:
             "/audit_unanswered": "Audit unanswered:",
         }
         command_name = body.get("command")
+        say(f"{self.admins}")
         if not self.audit_session and command_name == "/audit_unanswered":
             say("There is no active audit session")
         else:

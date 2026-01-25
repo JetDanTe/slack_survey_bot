@@ -11,12 +11,18 @@ class AdminHandler:
     async def setup_first_admin(self):
         async with async_session_maker() as session:
             admin_manager = UserCRUD_Manager(model=Admin)
-            self.first_admin = await admin_manager.create_user(
-                Admin(slack_id=self.first_admin_id, is_admin=True), session
-            )
+            try:
+                self.first_admin = await admin_manager.create_user(
+                    Admin(slack_id=self.first_admin_id, is_admin=True), session
+                )
+                print(f"INFO: First admin {self.first_admin_id} created successfully.")
+            except Exception:
+                print(
+                    f"INFO: Admin user {self.first_admin_id} already exists in the admin table."
+                )
 
     async def get_all_admins(self):
         async with async_session_maker() as session:
             admin_manager = UserCRUD_Manager(model=Admin)
             admins = await admin_manager.get_all(session=session)
-            return admins
+            return [admin.slack_id for admin in admins]
