@@ -2,14 +2,6 @@
 Description:
 Slack bot for auditing user
 
-TBD:
-1. Add .json config file where will be stored some static data. The main goal remove hardcoded strings.
-2. Add possibility to get report from any audit.
-3. Update all user info, to only is_deleted state
-4. Create docker and docker compose files for auto setup from scratch.
-5. Add logging to external file.
-6. Add tests
-
 Get slack tokens:
 1. https://api.slack.com/apps/YOUR_BOT_ID/oauth?
 2. Copy Bot User OAuth Token
