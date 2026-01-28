@@ -15,7 +15,7 @@ class UserCRUD_Manager(BaseCRUDManager):
             session=session, field=self.model.slack_id, field_value=new_user.slack_id
         )
         if maybe_user:
-            raise Exception(f"User with email {new_user.slack_id} already exists")
+            raise Exception(f"User with id {new_user.slack_id} already exists")
 
         user_fields = {
             col.name: getattr(new_user, col.name)
@@ -23,10 +23,6 @@ class UserCRUD_Manager(BaseCRUDManager):
         }
         new_user = await self.create(session=session, **user_fields)
         return new_user
-
-
-async def get_all(self, session: AsyncSession) -> list[Slack_User | Admin]:
-    return await self.get_all(session=session, model=self.model)
 
 
 user_manager = UserCRUD_Manager()

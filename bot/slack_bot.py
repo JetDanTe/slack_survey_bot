@@ -4,6 +4,7 @@ import typing as tp
 
 from custom_exceptions import EnvironmentVarException
 from services.admin_handler.main import AdminHandler
+from services.user_handler.main import UserHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk.errors import SlackApiError
@@ -17,7 +18,6 @@ class AuditBot:
 
     def __init__(self, settings):
         self.database_manager = database_init(settings)
-        self.__check_tokens()
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
         self.audit_session = None
@@ -47,7 +47,7 @@ class AuditBot:
         self.app.command("/audit_get")(self.admin_check(self.not_implemented))
 
         # Socket mode handler to connect the bot to Slack
-        self.handler = SocketModeHandler(self.app, self.SLACK_APP_TOKEN)
+        self.handler = SocketModeHandler(self.app, settings.SLACK_APP_TOKEN)
 
     async def initialize_admins(self, settings) -> tp.List[str]:
         """
@@ -151,9 +151,18 @@ class AuditBot:
 
     def update_users(self, ack, body, say):
         """Gather user data from Slack. Update slack user status if_delete and add new users."""
-        users = self.app.client.users_list()["members"]
-        self.database_manager.update_users(users)
-        say("Users updated")
+        ack()
+        say("Starting user update...")
+        try:
+            users = self.app.client.users_list()["members"]
+            result = asyncio.run(UserHandler().update_users(users))
+
+            say(
+                f"Users updated successfully.\nCreated: {result['created']}\nUpdated: {result['updated']}\nErrors: {result['errors']}"
+            )
+        except Exception as e:
+            print(f"Error updating users: {e}")
+            say(f"Failed to update users: {e}")
 
     def _format_user_list(self, users: tp.Text) -> tp.List[tp.Dict]:
         """

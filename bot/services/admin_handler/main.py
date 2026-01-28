@@ -16,10 +16,13 @@ class AdminHandler:
                     Admin(slack_id=self.first_admin_id, is_admin=True), session
                 )
                 print(f"INFO: First admin {self.first_admin_id} created successfully.")
-            except Exception:
-                print(
-                    f"INFO: Admin user {self.first_admin_id} already exists in the admin table."
-                )
+            except Exception as e:
+                if "already exists" in str(e):
+                    print(
+                        f"INFO: Admin user {self.first_admin_id} already exists in the admin table."
+                    )
+                else:
+                    raise e
 
     async def get_all_admins(self):
         async with async_session_maker() as session:
