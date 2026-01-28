@@ -1,23 +1,18 @@
 import asyncio
-import os
 import typing as tp
 
-from custom_exceptions import EnvironmentVarException
 from services.admin_handler.main import AdminHandler
 from services.user_handler.main import UserHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk.errors import SlackApiError
 
-from shared.services.database.db import database_init
 from shared.services.survey.survey import AuditSession
 
 
 class AuditBot:
-    _token_vars = ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN")
-
     def __init__(self, settings):
-        self.database_manager = database_init(settings)
+        self.database_manager = None
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
         self.audit_session = None
@@ -56,14 +51,6 @@ class AuditBot:
         handler = AdminHandler(settings)
         await handler.setup_first_admin()
         return await handler.get_all_admins()
-
-    def __check_tokens(self):
-        """Check if slack token vars exist in the system"""
-        for var in self._token_vars:
-            if var not in os.environ:
-                raise EnvironmentVarException(f'The var "{var} is absent"')
-            else:
-                exec(f"self.{var} = '{os.environ[var]}'")
 
     def admin_check(self, func):
         """Decorator to check if the command is issued by an admin."""
