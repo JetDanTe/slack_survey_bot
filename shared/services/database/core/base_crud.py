@@ -39,3 +39,17 @@ class BaseCRUDManager(ABC):
         query = select(model)
         result = await session.execute(query)
         return result.scalars().all()
+
+    async def update(self, session: AsyncSession, instance: Base, **kwargs) -> Base:
+        for key, value in kwargs.items():
+            setattr(instance, key, value)
+        session.add(instance)
+        try:
+            await session.commit()
+            await session.refresh(instance)
+            return instance
+        except Exception:
+            await session.rollback()
+            raise Exception(
+                f"Error has occurred while updating {self.model} instance with {kwargs}"
+            )
