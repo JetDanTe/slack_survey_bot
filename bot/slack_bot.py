@@ -233,7 +233,7 @@ class AuditBot:
         }
         command_name = body.get("command")
         self.safe_say(
-            receiver=body.get("event").get("user"),
+            receiver=body.get("user_id"),
             message=f"{self.admins}",
             say_func=say,
         )
@@ -276,7 +276,6 @@ class AuditBot:
     def shadow_answer(self, ack, body, say):
         """Trigger on any not slash command messages"""
         ack()
-        print(body)
         self.safe_say(
             receiver=body.get("event").get("user"),
             message="Sorry, do not understand. Use /help command or ask manager.",
