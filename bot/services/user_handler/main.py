@@ -6,6 +6,18 @@ from shared.services.database.users.crud import user_manager
 
 
 class UserHandler:
+    async def get_user_realname(self, slack_id: str) -> tp.Optional[str]:
+        """
+        Retrieves the real name of a user by their Slack ID.
+        """
+        async with async_session_maker() as session:
+            user = await user_manager.get(
+                session=session, field=Slack_User.slack_id, field_value=slack_id
+            )
+            if user:
+                return user.realname
+            return None
+
     async def update_users(self, slack_users: tp.List[tp.Dict]):
         """
         Updates local database with users from Slack.
