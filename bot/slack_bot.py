@@ -59,7 +59,11 @@ class AuditBot:
             ack()
             user_id = body["user_id"]
             if user_id not in self.admins:
-                say("You are not authorized to perform this action.")
+                self.safe_say(
+                    receiver=body.get("event").get("user"),
+                    message="You are not authorized to perform this action.",
+                    say_func=say,
+                )
                 return
             return func(ack, body, say, *args, **kwargs)
 
@@ -68,7 +72,11 @@ class AuditBot:
     def not_implemented(self, ack, body, say):
         """Plug for handling uncreated commands"""
         ack()
-        say("Command not implemented, yet.")
+        self.safe_say(
+            receiver=body.get("event").get("user"),
+            message="Command not implemented, yet.",
+            say_func=say,
+        )
 
     def start_audit(self, ack, body, say):
         """Audit process main function"""
@@ -139,17 +147,27 @@ class AuditBot:
     def update_users(self, ack, body, say):
         """Gather user data from Slack. Update slack user status if_delete and add new users."""
         ack()
-        say("Starting user update...")
+
+        self.safe_say(
+            receiver=body.get("event").get("user"),
+            message="Starting user update...",
+            say_func=say,
+        )
         try:
             users = self.app.client.users_list()["members"]
             result = asyncio.run(UserHandler().update_users(users))
 
-            say(
-                f"Users updated successfully.\nCreated: {result['created']}\nUpdated: {result['updated']}\nErrors: {result['errors']}"
+            self.safe_say(
+                receiver=body.get("event").get("user"),
+                message=f"Users updated successfully.\nCreated: {result['created']}\nUpdated: {result['updated']}\nErrors: {result['errors']}",
+                say_func=say,
             )
         except Exception as e:
-            print(f"Error updating users: {e}")
-            say(f"Failed to update users: {e}")
+            self.safe_say(
+                receiver=body.get("event").get("user"),
+                message=f"Failed to update users: {e}",
+                say_func=say,
+            )
 
     def _format_user_list(self, users: tp.Text) -> tp.List[tp.Dict]:
         """
@@ -192,13 +210,18 @@ class AuditBot:
         """Update list of users which audit can ignore"""
         ack()
         result = self._handle_list_of_users(body, "ignore")
-        say(result)
+
+        self.safe_say(
+            receiver=body.get("event").get("user"), message=f"{result}", say_func=say
+        )
 
     def update_admin(self, ack, body, say):
         """Set column is_admin to True in the database"""
         ack()
         result = self._handle_list_of_users(body, "admin")
-        say(result)
+        self.safe_say(
+            receiver=body.get("event").get("user"), message=f"{result}", say_func=say
+        )
 
     def show_users(self, ack, body, say):
         """Universal command to show a list of users. Depends on which command is triggered."""
@@ -209,37 +232,65 @@ class AuditBot:
             "/audit_unanswered": "Audit unanswered:",
         }
         command_name = body.get("command")
-        say(f"{self.admins}")
+        self.safe_say(
+            receiver=body.get("user_id"),
+            message=f"{self.admins}",
+            say_func=say,
+        )
         if not self.audit_session and command_name == "/audit_unanswered":
-            say("There is no active audit session")
+            self.safe_say(
+                receiver=body.get("event").get("user"),
+                message="There is no active audit session",
+                say_func=say,
+            )
         else:
             users_to_show = self.database_manager.get_users(
                 command_name,
                 None if not self.audit_session else self.audit_session.table_name,
             )
             if isinstance(users_to_show, str):
-                say(users_to_show)
+                self.safe_say(
+                    receiver=body.get("event").get("user"),
+                    message=f"{users_to_show}",
+                    say_func=say,
+                )
             else:
                 users_to_show = "\n".join(f"<@{user.id}>" for user in users_to_show)
                 text = f"{command_mapping.get(command_name, 'Users:')}\n{users_to_show}"
-                say(text)
+                self.safe_say(
+                    receiver=body.get("event").get("user"),
+                    message=f"{text}",
+                    say_func=say,
+                )
 
     def show_user_help(self, ack, body, say):
         """Return to user string with help information"""
         ack()
-        say(
-            "Use next command to answer:\n /answer <your_location>\n"
-            "For example:\n /answer Paris"
+        self.safe_say(
+            receiver=body.get("event").get("user"),
+            message="Use next command to answer:\n /answer <your_location>\n"
+            "For example:\n /answer Paris",
+            say_func=say,
         )
 
     def shadow_answer(self, ack, body, say):
         """Trigger on any not slash command messages"""
         ack()
-        say(
-            text="Sorry, do not understand. Use /help command or ask manager.",
+        self.safe_say(
+            receiver=body.get("event").get("user"),
+            message="Sorry, do not understand. Use /help command or ask manager.",
+            say_func=say,
             channel=body.get("event").get("channel"),
             thread_ts=body.get("event").get("ts"),
         )
+
+    def safe_say(self, receiver: str, message: str, say_func, **kwargs):
+        """Wrapper for say() that respects debug mode."""
+        receiver = asyncio.run(UserHandler().get_user_realname(receiver))
+        if self.debug:
+            print(f'[DEBUG] Would say: "{message}" to {receiver}')
+        else:
+            say_func(message, **kwargs)
 
     def start(self):
         """Connects to Slack in socket mode"""
