@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from shared.schemas.base_models import Base
+from shared.schemas.surveys import Survey, SurveyResponse
 from shared.schemas.users import Admin, Slack_User
 from shared.services.settings.main import settings
 

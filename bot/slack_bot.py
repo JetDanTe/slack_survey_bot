@@ -2,12 +2,11 @@ import asyncio
 import typing as tp
 
 from services.admin_handler.main import AdminHandler
+from services.survey_handler.main import SurveyHandler
 from services.user_handler.main import UserHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk.errors import SlackApiError
-
-from shared.services.survey.survey import AuditSession
 
 
 class AuditBot:
@@ -22,7 +21,7 @@ class AuditBot:
 
         # Define bot commands and event handlers
         # Audit control
-        self.app.command("/audit_start")(self.admin_check(self.start_audit))
+        self.app.command("/audit_start")(self.admin_check(self.start_survey))
         self.app.command("/audit_stop")(self.admin_check(self.close_audit))
         self.app.command("/audit_unanswered")(self.admin_check(self.show_users))
 
@@ -78,18 +77,36 @@ class AuditBot:
             say_func=say,
         )
 
-    def start_audit(self, ack, body, say):
+    def start_survey(self, ack, body, say):
         """Audit process main function"""
-        audit_message = body.get("text")
+        audit_message = body.get("text").splitlines()
+        owner_id = body.get("user_id")
+        owner_name = body.get("user_name")
         say(f"Users will receive next message: \n{audit_message}")
         ack()  # Acknowledge the command
-        if self.audit_session is not True:
-            self.audit_session = AuditSession(
-                self.audit_name, self.send_message, self.database_manager
+        survey = asyncio.run(
+            SurveyHandler().create_survey(
+                survey_name=audit_message[0],
+                owner_slack_id=owner_id,
+                owner_name=owner_name,
             )
-            self.audit_session.open_session(audit_message)
-        else:
-            say("There is already an active audit session.")
+        )
+
+        print(
+            survey.survey_name,
+            survey.id,
+            survey.owner_name,
+            survey.owner_slack_id,
+            survey.created_at,
+        )
+
+        # if self.audit_session is not True:
+        #     self.audit_session = AuditSession(
+        #         self.audit_name, self.send_message, self.database_manager
+        #     )
+        #     self.audit_session.open_session(audit_message)
+        # else:
+        #     say("There is already an active audit session.")
 
     def send_message(self, user_id, message):
         """Alarm. Danger. This func can send messages to real people in your workspace."""
@@ -109,24 +126,25 @@ class AuditBot:
     def collect_answer(self, ack, body, say):
         """Takes the user's answer and puts it into the database"""
         ack()
-        data = {
-            "id": body["user_id"],
-            "name": body.get("user_name"),
-            "answer": body["text"],
-        }
-        if not self.audit_session:
-            say(
-                "There is no active audit session. Please wait until an audit is started."
+        survey_answer = asyncio.run(
+            SurveyHandler().add_survey_response(
+                survey_id=1, respondent_slack_id=body["user_id"], responses=body["text"]
             )
-        else:
-            # existed_answer = self.database_manager.check_if_answer_exist(data)
-            # if not existed_answer:
-            self.audit_session.add_response(data)
-            say(
-                f"Thank you <@{body['user_id']}>! Your response '{body['text']}' has been recorded."
-            )
-            # else:
-            #    say("You already answered.")
+        )
+        print(survey_answer)
+        # if not self.audit_session:
+        #     say(
+        #         "There is no active audit session. Please wait until an audit is started."
+        #     )
+        # else:
+        #     # existed_answer = self.database_manager.check_if_answer_exist(data)
+        #     # if not existed_answer:
+        #     self.audit_session.add_response(data)
+        #     say(
+        #         f"Thank you <@{body['user_id']}>! Your response '{body['text']}' has been recorded."
+        #     )
+        # else:
+        #    say("You already answered.")
 
     def close_audit(self, ack, body, say):
         """Close audit and return audit report .xlsx file"""
