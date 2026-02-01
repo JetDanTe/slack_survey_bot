@@ -2,11 +2,11 @@ import asyncio
 import typing as tp
 
 from services.admin_handler.main import AdminHandler
+from services.slack_block_handler import SurveyControlBlock
 from services.survey_handler.main import SurveyHandler
 from services.user_handler.main import UserHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-from slack_sdk.errors import SlackApiError
 
 
 class AuditBot:
@@ -39,6 +39,13 @@ class AuditBot:
         # Not implemented commands
         self.app.command("/audits_show")(self.admin_check(self.not_implemented))
         self.app.command("/audit_get")(self.admin_check(self.not_implemented))
+
+        # Survey button action handlers
+        self.app.action("survey_start")(self.handle_survey_start)
+        self.app.action("survey_stop")(self.handle_survey_stop)
+        self.app.action("survey_unanswered")(self.handle_survey_unanswered)
+        self.app.action("survey_user_list")(self.handle_user_list_select)
+        self.app.action("survey_empty_2")(self.handle_survey_empty)
 
         # Socket mode handler to connect the bot to Slack
         self.handler = SocketModeHandler(self.app, settings.SLACK_APP_TOKEN)
@@ -82,8 +89,8 @@ class AuditBot:
         audit_message = body.get("text").splitlines()
         owner_id = body.get("user_id")
         owner_name = body.get("user_name")
-        say(f"Users will receive next message: \n{audit_message}")
         ack()  # Acknowledge the command
+
         survey = asyncio.run(
             SurveyHandler().create_survey(
                 survey_name=audit_message[0],
@@ -92,36 +99,85 @@ class AuditBot:
             )
         )
 
-        print(
-            survey.survey_name,
-            survey.id,
-            survey.owner_name,
-            survey.owner_slack_id,
-            survey.created_at,
+        # Build the survey control message with 5 buttons
+        control_block = SurveyControlBlock(
+            survey_id=survey.id,
+            survey_name=survey.survey_name,
+            survey_text=audit_message[1],
         )
 
-        # if self.audit_session is not True:
-        #     self.audit_session = AuditSession(
-        #         self.audit_name, self.send_message, self.database_manager
-        #     )
-        #     self.audit_session.open_session(audit_message)
-        # else:
-        #     say("There is already an active audit session.")
+        say(
+            text=f"Survey '{survey.survey_name}' started!",
+            blocks=control_block.build(),
+        )
 
-    def send_message(self, user_id, message):
-        """Alarm. Danger. This func can send messages to real people in your workspace."""
-        if not self.debug:
-            try:
-                response = self.app.client.conversations_open(users=user_id)
-                dm_channel_id = response["channel"]["id"]
+    def handle_survey_start(self, ack, body, say):
+        """Handle the Start button click."""
+        ack()
+        survey_id = body["actions"][0]["value"]
+        user_id = body["user"]["id"]
+        say(f"<@{user_id}> clicked Start for survey ID: `{survey_id}`")
+        # TODO: Implement actual survey start logic
 
-                self.app.client.chat_postMessage(channel=dm_channel_id, text=message)
-            except SlackApiError as e:
-                print(f"Error sending message: {e.response['error']}")
+    def handle_survey_stop(self, ack, body, say):
+        """Handle the Stop button click."""
+        ack()
+        survey_id = body["actions"][0]["value"]
+        user_id = body["user"]["id"]
+        say(f"<@{user_id}> clicked Stop for survey ID: `{survey_id}`")
+        # TODO: Implement actual survey stop logic
+
+    def handle_survey_unanswered(self, ack, body, say):
+        """Handle the Unanswered button click."""
+        ack()
+        survey_id = body["actions"][0]["value"]
+        user_id = body["user"]["id"]
+        say(f"<@{user_id}> requested unanswered list for survey ID: `{survey_id}`")
+        # TODO: Implement actual unanswered users logic
+
+    def handle_user_list_select(self, ack, body, say):
+        """Handle the User List dropdown selection."""
+        ack()
+        selected_option = body["actions"][0]["selected_option"]
+        value = selected_option["value"]
+        text = selected_option["text"]["text"]
+        user_id = body["user"]["id"]
+
+        # Parse value which is "survey_id:list_type"
+        if ":" in value:
+            survey_id, list_type = value.split(":", 1)
         else:
-            print(
-                f'Message sending initialized. Message not sent - Debug "{self.debug}"'
-            )
+            survey_id = value
+            list_type = "unknown"
+
+        say(
+            f"<@{user_id}> selected user list: *{text}* (`{list_type}`) for survey ID: `{survey_id}`"
+        )
+        # TODO: Implement actual user list application logic
+
+    def handle_survey_empty(self, ack, body, say):
+        """Handle empty button clicks (placeholder for future functionality)."""
+        ack()
+        survey_id = body["actions"][0]["value"]
+        action_id = body["actions"][0]["action_id"]
+        say(
+            f"Empty button `{action_id}` clicked for survey ID: `{survey_id}` (not implemented)"
+        )
+
+    # def send_message(self, user_id, message):
+    #     """Alarm. Danger. This func can send messages to real people in your workspace."""
+    #     if not self.debug:
+    #         try:
+    #             response = self.app.client.conversations_open(users=user_id)
+    #             dm_channel_id = response["channel"]["id"]
+
+    #             self.app.client.chat_postMessage(channel=dm_channel_id, text=message)
+    #         except SlackApiError as e:
+    #             print(f"Error sending message: {e.response['error']}")
+    #     else:
+    #         print(
+    #             f'Message sending initialized. Message not sent - Debug "{self.debug}"'
+    #         )
 
     def collect_answer(self, ack, body, say):
         """Takes the user's answer and puts it into the database"""
