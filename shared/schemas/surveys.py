@@ -7,7 +7,7 @@ SQLAlchemy models for database tables and Pydantic schemas for validation.
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Column, ForeignKey, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.schemas.base_models import Base
@@ -15,6 +15,13 @@ from shared.schemas.base_models import Base
 # =============================================================================
 # SQLAlchemy Models (Database Tables)
 # =============================================================================
+
+survey_user_lists = Table(
+    "survey_user_lists",
+    Base.metadata,
+    Column("survey_id", ForeignKey("surveys.id"), primary_key=True),
+    Column("user_list_id", ForeignKey("user_lists.id"), primary_key=True),
+)
 
 
 class Survey(Base):
@@ -30,6 +37,10 @@ class Survey(Base):
     owner_slack_id: Mapped[str] = mapped_column(String(50), nullable=False)
     owner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True)
+
+    # user_lists: Mapped[list["UserList"]] = relationship(
+    #     "UserList", secondary=survey_user_lists, back_populates="surveys"
+    # )
 
     # Relationship to responses
     responses: Mapped[list["SurveyResponse"]] = relationship(
@@ -80,6 +91,7 @@ class SurveyRead(BaseModel):
     is_active: bool
     created_at: datetime
     slack_id: str
+    # Note: user_list_ids not included by default to avoid complexity in fetching unless requested
 
 
 class SurveyResponseCreate(BaseModel):

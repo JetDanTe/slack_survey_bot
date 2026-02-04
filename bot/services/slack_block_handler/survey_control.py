@@ -1,5 +1,7 @@
 """Survey control panel block builder."""
 
+from typing import Dict, List
+
 from pydantic import BaseModel, Field
 
 
@@ -13,6 +15,9 @@ class SurveyControlBlock(BaseModel):
     survey_id: int = Field(..., description="Survey ID from database")
     survey_name: str = Field(..., min_length=1, max_length=255)
     survey_text: str = Field(default="", description="Survey message text to display")
+    available_user_lists: List[Dict[str, str]] = Field(
+        default_factory=list, description="List of user lists with 'text' and 'value'"
+    )
 
     def build(self) -> list:
         """Build complete Slack blocks for survey control panel."""
@@ -69,25 +74,33 @@ class SurveyControlBlock(BaseModel):
         return button
 
     def _user_list_dropdown(self) -> dict:
-        """Build dropdown menu for user lists selection."""
-        # TODO: Replace with actual user lists from database
-        placeholder_options = [
-            {
-                "text": {"type": "plain_text", "text": "All Users"},
-                "value": f"{self.survey_id}:all_users",
-            },
-            {
-                "text": {"type": "plain_text", "text": "Active Users"},
-                "value": f"{self.survey_id}:active_users",
-            },
-            {
-                "text": {"type": "plain_text", "text": "Custom List 1"},
-                "value": f"{self.survey_id}:custom_1",
-            },
-        ]
+        """Build multi-select dropdown menu for user lists selection."""
+
+        options = []
+        if self.available_user_lists:
+            for ul in self.available_user_lists:
+                options.append(
+                    {
+                        "text": {"type": "plain_text", "text": ul["text"]},
+                        "value": ul["value"],
+                    }
+                )
+        else:
+            # Fallback if no lists
+            options = [
+                {
+                    "text": {"type": "plain_text", "text": "No lists available"},
+                    "value": "none",
+                }
+            ]
+
         return {
-            "type": "static_select",
-            "placeholder": {"type": "plain_text", "text": "User list", "emoji": True},
+            "type": "multi_static_select",
+            "placeholder": {
+                "type": "plain_text",
+                "text": "Select User Lists",
+                "emoji": True,
+            },
             "action_id": "survey_user_list",
-            "options": placeholder_options,
+            "options": options,
         }

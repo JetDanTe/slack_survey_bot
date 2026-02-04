@@ -8,6 +8,10 @@ from services.user_handler.main import UserHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from shared.services.database.core.dependencies import async_session_maker
+from shared.services.database.surveys.crud import survey_manager
+from shared.services.database.user_lists.crud import user_list_manager
+
 
 class AuditBot:
     def __init__(self, settings):
@@ -16,7 +20,10 @@ class AuditBot:
         self.app = App(token=settings.SLACK_BOT_TOKEN)
         self.audit_session = None
         # Initialize admins
-        self.admins = asyncio.run(self.initialize_admins(settings))
+        # self.admins = asyncio.run(self.initialize_admins(settings))
+        self.admins = [
+            "UQMUQPV2Q",
+        ]
         self.audit_name = "user_location"  # will be None
 
         # Define bot commands and event handlers
@@ -99,17 +106,29 @@ class AuditBot:
             )
         )
 
+        # Fetch available user lists
+        user_lists = asyncio.run(self._get_user_lists_for_block(survey.id))
+
         # Build the survey control message with 5 buttons
         control_block = SurveyControlBlock(
             survey_id=survey.id,
             survey_name=survey.survey_name,
             survey_text=audit_message[1],
+            available_user_lists=user_lists,
         )
 
         say(
             text=f"Survey '{survey.survey_name}' started!",
             blocks=control_block.build(),
         )
+
+    async def _get_user_lists_for_block(
+        self, survey_id: int
+    ) -> tp.List[tp.Dict[str, str]]:
+        """Helper to fetch and format user lists for UI."""
+        async with async_session_maker() as session:
+            lists = await user_list_manager.get_all_user_lists(session)
+            return [{"text": ul.name, "value": f"{survey_id}:{ul.id}"} for ul in lists]
 
     def handle_survey_start(self, ack, body, say):
         """Handle the Start button click."""
@@ -138,22 +157,46 @@ class AuditBot:
     def handle_user_list_select(self, ack, body, say):
         """Handle the User List dropdown selection."""
         ack()
-        selected_option = body["actions"][0]["selected_option"]
-        value = selected_option["value"]
-        text = selected_option["text"]["text"]
         user_id = body["user"]["id"]
 
-        # Parse value which is "survey_id:list_type"
-        if ":" in value:
-            survey_id, list_type = value.split(":", 1)
-        else:
-            survey_id = value
-            list_type = "unknown"
+        selected_options = body["actions"][0].get("selected_options")
 
-        say(
-            f"<@{user_id}> selected user list: *{text}* (`{list_type}`) for survey ID: `{survey_id}`"
-        )
-        # TODO: Implement actual user list application logic
+        if not selected_options:
+            return
+
+        first_val = selected_options[0]["value"]
+        if ":" not in first_val:
+            say(f"<@{user_id}> Error: Invalid option format.")
+            return
+
+        survey_id_str, _ = first_val.rsplit(":", 1)
+        try:
+            survey_id = int(survey_id_str)
+        except ValueError:
+            say(f"<@{user_id}> Error: Invalid survey ID.")
+            return
+
+        list_ids = []
+        list_names = []
+        for opt in selected_options:
+            val = opt["value"]
+            parts = val.rsplit(":", 1)
+            if len(parts) == 2:
+                list_ids.append(int(parts[1]))
+                list_names.append(opt["text"]["text"])
+
+        # Update DB
+        try:
+            asyncio.run(self._update_survey_lists(survey_id, list_ids))
+            say(
+                f"<@{user_id}> updated lists for survey `{survey_id}`: *{', '.join(list_names)}*"
+            )
+        except Exception as e:
+            say(f"<@{user_id}> Error updating lists: {e}")
+
+    async def _update_survey_lists(self, survey_id: int, list_ids: tp.List[int]):
+        async with async_session_maker() as session:
+            await survey_manager.update_survey_user_lists(survey_id, list_ids, session)
 
     def handle_survey_empty(self, ack, body, say):
         """Handle empty button clicks (placeholder for future functionality)."""

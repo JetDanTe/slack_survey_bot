@@ -4,7 +4,7 @@ Survey CRUD Manager.
 Provides async CRUD operations for Survey and SurveyResponse models.
 """
 
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from shared.schemas.surveys import (
     SurveyResponse,
     SurveyResponseCreate,
 )
+from shared.schemas.user_lists import UserList
 from shared.services.database.core.base_crud import BaseCRUDManager
 
 
@@ -46,6 +47,16 @@ class SurveyCRUDManager(BaseCRUDManager):
             slack_id=survey_data.owner_slack_id,  # Required by Base model
             is_active=True,
         )
+        # if survey_data.user_list_ids:
+        #     query = select(UserList).filter(UserList.id.in_(survey_data.user_list_ids))
+        #     result = await session.execute(query)
+        #     user_lists = result.scalars().all()
+        #     if not user_lists:
+        #          # Should we fail or just continue? Failing seems safer as user requested specific lists.
+        #          # But for now let's just add what we found.
+        #          pass
+        #     survey.user_lists = list(user_lists)
+
         session.add(survey)
         try:
             await session.commit()
@@ -54,6 +65,33 @@ class SurveyCRUDManager(BaseCRUDManager):
         except Exception as e:
             await session.rollback()
             raise Exception(f"Error creating survey: {e}")
+
+    async def update_survey_user_lists(
+        self, survey_id: int, user_list_ids: List[int], session: AsyncSession
+    ) -> Survey:
+        """
+        Update the user lists associated with a survey.
+
+        :param survey_id: ID of the survey
+        :param user_list_ids: List of new UserList IDs
+        :param session: AsyncSession
+        :return: Updated survey
+        """
+        survey = await self.get_survey_by_id(
+            survey_id, session, include_responses=False
+        )
+        if not survey:
+            raise Exception("Survey not found")
+
+        query = select(UserList).filter(UserList.id.in_(user_list_ids))
+        result = await session.execute(query)
+        new_lists = result.scalars().all()
+
+        survey.user_lists = list(new_lists)
+        session.add(survey)
+        await session.commit()
+        await session.refresh(survey)
+        return survey
 
     async def get_survey_by_id(
         self, survey_id: int, session: AsyncSession, include_responses: bool = False
