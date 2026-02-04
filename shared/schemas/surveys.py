@@ -34,6 +34,7 @@ class Survey(Base):
     __tablename__ = "surveys"
 
     survey_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    survey_text: Mapped[str] = mapped_column(Text, server_default="")
     owner_slack_id: Mapped[str] = mapped_column(String(50), nullable=False)
     owner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True)
@@ -75,6 +76,7 @@ class SurveyCreate(BaseModel):
     """Schema for creating a new survey."""
 
     survey_name: str = Field(..., min_length=1, max_length=255)
+    survey_text: str = Field(..., min_length=1)
     owner_slack_id: str = Field(..., min_length=1, max_length=50)
     owner_name: str = Field(..., min_length=1, max_length=255)
 

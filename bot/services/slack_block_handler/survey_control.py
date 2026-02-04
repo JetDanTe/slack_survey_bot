@@ -35,7 +35,7 @@ class SurveyControlBlock(BaseModel):
             f"ID: `{self.survey_id}`"
         )
         if self.survey_text:
-            text += f"\n\n{self.survey_text}"
+            text += f"\n\n`{self.survey_text}`"
         return {
             "type": "section",
             "text": {

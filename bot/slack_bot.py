@@ -11,41 +11,23 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from shared.services.database.core.dependencies import async_session_maker
 from shared.services.database.surveys.crud import survey_manager
 from shared.services.database.user_lists.crud import user_list_manager
+from shared.services.settings.main import settings
 
 
-class AuditBot:
-    def __init__(self, settings):
-        self.database_manager = None
+class SurveyBot:
+    def __init__(self):
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
-        self.audit_session = None
         # Initialize admins
-        # self.admins = asyncio.run(self.initialize_admins(settings))
-        self.admins = [
-            "UQMUQPV2Q",
-        ]
-        self.audit_name = "user_location"  # will be None
+        self.admins = asyncio.run(self.initialize_admins(settings))
 
         # Define bot commands and event handlers
         # Audit control
-        self.app.command("/audit_start")(self.admin_check(self.start_survey))
-        self.app.command("/audit_stop")(self.admin_check(self.close_audit))
-        self.app.command("/audit_unanswered")(self.admin_check(self.show_users))
+        self.app.command("/survey_manager")(self.admin_check(self.show_survey_manager))
 
         # User commands
-        self.app.command("/answer")(self.collect_answer)
-        self.app.command("/user_help")(self.show_user_help)
-        self.app.command("/admin_show")(self.show_users)
         self.app.message()(self.shadow_answer)
-
-        # Admin commands
-        self.app.command("/users_update")(self.admin_check(self.update_users))
-        self.app.command("/ignore_show")(self.admin_check(self.show_users))
-        self.app.command("/ignore_update")(self.admin_check(self.update_ignore))
-
-        # Not implemented commands
-        self.app.command("/audits_show")(self.admin_check(self.not_implemented))
-        self.app.command("/audit_get")(self.admin_check(self.not_implemented))
+        self.app.event("message")(self.handle_message_events)
 
         # Survey button action handlers
         self.app.action("survey_start")(self.handle_survey_start)
@@ -91,6 +73,50 @@ class AuditBot:
             say_func=say,
         )
 
+    def show_survey_manager(self, ack, body, say):
+        ack()
+
+        channel_id = body.get("channel_id")
+
+        try:
+            # Get bot's user ID
+            auth_test = self.app.client.auth_test()
+            bot_user_id = auth_test["user_id"]
+
+            # Fetch recent history
+            history = self.app.client.conversations_history(
+                channel=channel_id, limit=20
+            )
+            messages = history.get("messages", [])
+
+            for msg in messages:
+                # Check if message is from this bot and contains "Survey Control Panel"
+                if msg.get("user") == bot_user_id:
+                    blocks_str = str(msg.get("blocks", []))
+                    if "Survey Control Panel" in blocks_str:
+                        try:
+                            self.app.client.chat_delete(
+                                channel=channel_id, ts=msg["ts"]
+                            )
+                        except Exception as e:
+                            print(f"[ERROR] Failed to delete message {msg['ts']}: {e}")
+
+        except Exception as e:
+            print(f"[ERROR] Error cleaning up old messages: {e}")
+
+        surveys = asyncio.run(SurveyHandler().get_all_surveys())
+        for s in surveys:
+            control_block = SurveyControlBlock(
+                survey_id=s.id,
+                survey_name=s.survey_name,
+                survey_text=s.survey_text,
+            )
+
+            say(
+                text=f"Survey '{s.survey_name}':",
+                blocks=control_block.build(),
+            )
+
     def start_survey(self, ack, body, say):
         """Audit process main function"""
         audit_message = body.get("text").splitlines()
@@ -101,6 +127,7 @@ class AuditBot:
         survey = asyncio.run(
             SurveyHandler().create_survey(
                 survey_name=audit_message[0],
+                survey_text=audit_message[1],
                 owner_slack_id=owner_id,
                 owner_name=owner_name,
             )
@@ -135,7 +162,11 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
-        say(f"<@{user_id}> clicked Start for survey ID: `{survey_id}`")
+        thread_ts = body["container"].get("message_ts")
+        say(
+            f"<@{user_id}> clicked Start for survey ID: `{survey_id}`",
+            thread_ts=thread_ts,
+        )
         # TODO: Implement actual survey start logic
 
     def handle_survey_stop(self, ack, body, say):
@@ -143,7 +174,11 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
-        say(f"<@{user_id}> clicked Stop for survey ID: `{survey_id}`")
+        thread_ts = body["container"].get("message_ts")
+        say(
+            f"<@{user_id}> clicked Stop for survey ID: `{survey_id}`",
+            thread_ts=thread_ts,
+        )
         # TODO: Implement actual survey stop logic
 
     def handle_survey_unanswered(self, ack, body, say):
@@ -151,7 +186,11 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
-        say(f"<@{user_id}> requested unanswered list for survey ID: `{survey_id}`")
+        thread_ts = body["container"].get("message_ts")
+        say(
+            f"<@{user_id}> requested unanswered list for survey ID: `{survey_id}`",
+            thread_ts=thread_ts,
+        )
         # TODO: Implement actual unanswered users logic
 
     def handle_user_list_select(self, ack, body, say):
@@ -203,8 +242,10 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         action_id = body["actions"][0]["action_id"]
+        thread_ts = body["container"].get("message_ts")
         say(
-            f"Empty button `{action_id}` clicked for survey ID: `{survey_id}` (not implemented)"
+            f"Empty button `{action_id}` clicked for survey ID: `{survey_id}` (not implemented)",
+            thread_ts=thread_ts,
         )
 
     # def send_message(self, user_id, message):
@@ -221,45 +262,6 @@ class AuditBot:
     #         print(
     #             f'Message sending initialized. Message not sent - Debug "{self.debug}"'
     #         )
-
-    def collect_answer(self, ack, body, say):
-        """Takes the user's answer and puts it into the database"""
-        ack()
-        survey_answer = asyncio.run(
-            SurveyHandler().add_survey_response(
-                survey_id=1, respondent_slack_id=body["user_id"], responses=body["text"]
-            )
-        )
-        print(survey_answer)
-        # if not self.audit_session:
-        #     say(
-        #         "There is no active audit session. Please wait until an audit is started."
-        #     )
-        # else:
-        #     # existed_answer = self.database_manager.check_if_answer_exist(data)
-        #     # if not existed_answer:
-        #     self.audit_session.add_response(data)
-        #     say(
-        #         f"Thank you <@{body['user_id']}>! Your response '{body['text']}' has been recorded."
-        #     )
-        # else:
-        #    say("You already answered.")
-
-    def close_audit(self, ack, body, say):
-        """Close audit and return audit report .xlsx file"""
-        ack()  # Acknowledge the command
-        channel_id = body.get("channel_id")
-        if self.audit_session is not None:
-            self.audit_session.close_session()
-            audit_summary = self.audit_session.get_audit_summary()
-            self.app.client.files_upload_v2(
-                channel=channel_id,
-                initial_comment="Audit closed!\nHere's report file :smile:",
-                file=audit_summary,
-            )
-            self.audit_session = None
-        else:
-            say("There is no active audit session to close.")
 
     def update_users(self, ack, body, say):
         """Gather user data from Slack. Update slack user status if_delete and add new users."""
@@ -286,110 +288,6 @@ class AuditBot:
                 say_func=say,
             )
 
-    def _format_user_list(self, users: tp.Text) -> tp.List[tp.Dict]:
-        """
-        Format list of users from string to dict
-        :param users: Str
-        :return: List of dicts
-        """
-        users = users.split(" ")
-        formatted_users = [
-            {"id": None, "name": user.replace("@", ""), "profile": {"real_name": None}}
-            for user in users
-        ]
-        return formatted_users
-
-    def _handle_list_of_users(self, body: tp.Dict, update_type: str) -> tp.Text:
-        """
-        Handle list of users for different update types (admin or ignore).
-
-        :param users: List of usernames to update
-        :param update_type: Type of update ('admin' or 'ignore')
-        :return: List of not found users
-        :raises ValueError: If invalid update_type provided
-        """
-        if update_type not in ["admin", "ignore"]:
-            raise ValueError("update_type must be either 'admin' or 'ignore'")
-
-        text = f"{update_type.title()} list updated"
-        users = self._format_user_list(body.get("text"))
-        not_found_users = self.database_manager.update_users(
-            users,
-            to_ignore=(update_type == "ignore"),
-            to_admin=(update_type == "admin"),
-            by_name=True,
-        )
-        if not_found_users:
-            text += f"\nCould not find the following users: {', '.join(user.get('name') for user in not_found_users)}"
-        return text
-
-    def update_ignore(self, ack, body, say):
-        """Update list of users which audit can ignore"""
-        ack()
-        result = self._handle_list_of_users(body, "ignore")
-
-        self.safe_say(
-            receiver=body.get("event").get("user"), message=f"{result}", say_func=say
-        )
-
-    def update_admin(self, ack, body, say):
-        """Set column is_admin to True in the database"""
-        ack()
-        result = self._handle_list_of_users(body, "admin")
-        self.safe_say(
-            receiver=body.get("event").get("user"), message=f"{result}", say_func=say
-        )
-
-    def show_users(self, ack, body, say):
-        """Universal command to show a list of users. Depends on which command is triggered."""
-        ack()
-        command_mapping = {
-            "/ignore_show": "Ignored users:",
-            "/admin_show": "Admin users:",
-            "/audit_unanswered": "Audit unanswered:",
-        }
-        command_name = body.get("command")
-        self.safe_say(
-            receiver=body.get("user_id"),
-            message=f"{self.admins}",
-            say_func=say,
-        )
-        if not self.audit_session and command_name == "/audit_unanswered":
-            self.safe_say(
-                receiver=body.get("event").get("user"),
-                message="There is no active audit session",
-                say_func=say,
-            )
-        else:
-            users_to_show = self.database_manager.get_users(
-                command_name,
-                None if not self.audit_session else self.audit_session.table_name,
-            )
-            if isinstance(users_to_show, str):
-                self.safe_say(
-                    receiver=body.get("event").get("user"),
-                    message=f"{users_to_show}",
-                    say_func=say,
-                )
-            else:
-                users_to_show = "\n".join(f"<@{user.id}>" for user in users_to_show)
-                text = f"{command_mapping.get(command_name, 'Users:')}\n{users_to_show}"
-                self.safe_say(
-                    receiver=body.get("event").get("user"),
-                    message=f"{text}",
-                    say_func=say,
-                )
-
-    def show_user_help(self, ack, body, say):
-        """Return to user string with help information"""
-        ack()
-        self.safe_say(
-            receiver=body.get("event").get("user"),
-            message="Use next command to answer:\n /answer <your_location>\n"
-            "For example:\n /answer Paris",
-            say_func=say,
-        )
-
     def shadow_answer(self, ack, body, say):
         """Trigger on any not slash command messages"""
         ack()
@@ -408,6 +306,11 @@ class AuditBot:
             print(f'[DEBUG] Would say: "{message}" to {receiver}')
         else:
             say_func(message, **kwargs)
+
+    def handle_message_events(self, body, logger):
+        """Acknowledge message events (like message_changed) to avoid unhandled warnings."""
+        logger.debug(f"Received message event: {body}")
+        pass
 
     def start(self):
         """Connects to Slack in socket mode"""
