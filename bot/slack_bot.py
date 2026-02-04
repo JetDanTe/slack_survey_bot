@@ -8,38 +8,23 @@ from services.user_handler.main import UserHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from shared.services.settings.main import settings
 
-class AuditBot:
-    def __init__(self, settings):
-        self.database_manager = None
+
+class SurveyBot:
+    def __init__(self):
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
-        self.audit_session = None
         # Initialize admins
         self.admins = asyncio.run(self.initialize_admins(settings))
-        self.audit_name = "user_location"  # will be None
 
         # Define bot commands and event handlers
         # Audit control
         self.app.command("/survey_manager")(self.admin_check(self.show_survey_manager))
-        self.app.command("/audit_stop")(self.admin_check(self.close_audit))
-        self.app.command("/audit_unanswered")(self.admin_check(self.show_users))
 
         # User commands
-        self.app.command("/answer")(self.collect_answer)
-        self.app.command("/user_help")(self.show_user_help)
-        self.app.command("/admin_show")(self.show_users)
         self.app.message()(self.shadow_answer)
         self.app.event("message")(self.handle_message_events)
-
-        # Admin commands
-        self.app.command("/users_update")(self.admin_check(self.update_users))
-        self.app.command("/ignore_show")(self.admin_check(self.show_users))
-        self.app.command("/ignore_update")(self.admin_check(self.update_ignore))
-
-        # Not implemented commands
-        self.app.command("/audits_show")(self.admin_check(self.not_implemented))
-        self.app.command("/audit_get")(self.admin_check(self.not_implemented))
 
         # Survey button action handlers
         self.app.action("survey_start")(self.handle_survey_start)
@@ -239,45 +224,6 @@ class AuditBot:
     #             f'Message sending initialized. Message not sent - Debug "{self.debug}"'
     #         )
 
-    def collect_answer(self, ack, body, say):
-        """Takes the user's answer and puts it into the database"""
-        ack()
-        survey_answer = asyncio.run(
-            SurveyHandler().add_survey_response(
-                survey_id=1, respondent_slack_id=body["user_id"], responses=body["text"]
-            )
-        )
-        print(survey_answer)
-        # if not self.audit_session:
-        #     say(
-        #         "There is no active audit session. Please wait until an audit is started."
-        #     )
-        # else:
-        #     # existed_answer = self.database_manager.check_if_answer_exist(data)
-        #     # if not existed_answer:
-        #     self.audit_session.add_response(data)
-        #     say(
-        #         f"Thank you <@{body['user_id']}>! Your response '{body['text']}' has been recorded."
-        #     )
-        # else:
-        #    say("You already answered.")
-
-    def close_audit(self, ack, body, say):
-        """Close audit and return audit report .xlsx file"""
-        ack()  # Acknowledge the command
-        channel_id = body.get("channel_id")
-        if self.audit_session is not None:
-            self.audit_session.close_session()
-            audit_summary = self.audit_session.get_audit_summary()
-            self.app.client.files_upload_v2(
-                channel=channel_id,
-                initial_comment="Audit closed!\nHere's report file :smile:",
-                file=audit_summary,
-            )
-            self.audit_session = None
-        else:
-            say("There is no active audit session to close.")
-
     def update_users(self, ack, body, say):
         """Gather user data from Slack. Update slack user status if_delete and add new users."""
         ack()
@@ -302,110 +248,6 @@ class AuditBot:
                 message=f"Failed to update users: {e}",
                 say_func=say,
             )
-
-    def _format_user_list(self, users: tp.Text) -> tp.List[tp.Dict]:
-        """
-        Format list of users from string to dict
-        :param users: Str
-        :return: List of dicts
-        """
-        users = users.split(" ")
-        formatted_users = [
-            {"id": None, "name": user.replace("@", ""), "profile": {"real_name": None}}
-            for user in users
-        ]
-        return formatted_users
-
-    def _handle_list_of_users(self, body: tp.Dict, update_type: str) -> tp.Text:
-        """
-        Handle list of users for different update types (admin or ignore).
-
-        :param users: List of usernames to update
-        :param update_type: Type of update ('admin' or 'ignore')
-        :return: List of not found users
-        :raises ValueError: If invalid update_type provided
-        """
-        if update_type not in ["admin", "ignore"]:
-            raise ValueError("update_type must be either 'admin' or 'ignore'")
-
-        text = f"{update_type.title()} list updated"
-        users = self._format_user_list(body.get("text"))
-        not_found_users = self.database_manager.update_users(
-            users,
-            to_ignore=(update_type == "ignore"),
-            to_admin=(update_type == "admin"),
-            by_name=True,
-        )
-        if not_found_users:
-            text += f"\nCould not find the following users: {', '.join(user.get('name') for user in not_found_users)}"
-        return text
-
-    def update_ignore(self, ack, body, say):
-        """Update list of users which audit can ignore"""
-        ack()
-        result = self._handle_list_of_users(body, "ignore")
-
-        self.safe_say(
-            receiver=body.get("event").get("user"), message=f"{result}", say_func=say
-        )
-
-    def update_admin(self, ack, body, say):
-        """Set column is_admin to True in the database"""
-        ack()
-        result = self._handle_list_of_users(body, "admin")
-        self.safe_say(
-            receiver=body.get("event").get("user"), message=f"{result}", say_func=say
-        )
-
-    def show_users(self, ack, body, say):
-        """Universal command to show a list of users. Depends on which command is triggered."""
-        ack()
-        command_mapping = {
-            "/ignore_show": "Ignored users:",
-            "/admin_show": "Admin users:",
-            "/audit_unanswered": "Audit unanswered:",
-        }
-        command_name = body.get("command")
-        self.safe_say(
-            receiver=body.get("user_id"),
-            message=f"{self.admins}",
-            say_func=say,
-        )
-        if not self.audit_session and command_name == "/audit_unanswered":
-            self.safe_say(
-                receiver=body.get("event").get("user"),
-                message="There is no active audit session",
-                say_func=say,
-            )
-        else:
-            users_to_show = self.database_manager.get_users(
-                command_name,
-                None if not self.audit_session else self.audit_session.table_name,
-            )
-            if isinstance(users_to_show, str):
-                self.safe_say(
-                    receiver=body.get("event").get("user"),
-                    message=f"{users_to_show}",
-                    say_func=say,
-                )
-            else:
-                users_to_show = "\n".join(f"<@{user.id}>" for user in users_to_show)
-                text = f"{command_mapping.get(command_name, 'Users:')}\n{users_to_show}"
-                self.safe_say(
-                    receiver=body.get("event").get("user"),
-                    message=f"{text}",
-                    say_func=say,
-                )
-
-    def show_user_help(self, ack, body, say):
-        """Return to user string with help information"""
-        ack()
-        self.safe_say(
-            receiver=body.get("event").get("user"),
-            message="Use next command to answer:\n /answer <your_location>\n"
-            "For example:\n /answer Paris",
-            say_func=say,
-        )
 
     def shadow_answer(self, ack, body, say):
         """Trigger on any not slash command messages"""
