@@ -11,35 +11,18 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 class AuditBot:
     def __init__(self, settings):
-        self.database_manager = None
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
-        self.audit_session = None
         # Initialize admins
         self.admins = asyncio.run(self.initialize_admins(settings))
-        self.audit_name = "user_location"  # will be None
 
         # Define bot commands and event handlers
         # Audit control
         self.app.command("/survey_manager")(self.admin_check(self.show_survey_manager))
-        self.app.command("/audit_stop")(self.admin_check(self.close_audit))
-        self.app.command("/audit_unanswered")(self.admin_check(self.show_users))
 
         # User commands
-        self.app.command("/answer")(self.collect_answer)
-        self.app.command("/user_help")(self.show_user_help)
-        self.app.command("/admin_show")(self.show_users)
         self.app.message()(self.shadow_answer)
         self.app.event("message")(self.handle_message_events)
-
-        # Admin commands
-        self.app.command("/users_update")(self.admin_check(self.update_users))
-        self.app.command("/ignore_show")(self.admin_check(self.show_users))
-        self.app.command("/ignore_update")(self.admin_check(self.update_ignore))
-
-        # Not implemented commands
-        self.app.command("/audits_show")(self.admin_check(self.not_implemented))
-        self.app.command("/audit_get")(self.admin_check(self.not_implemented))
 
         # Survey button action handlers
         self.app.action("survey_start")(self.handle_survey_start)
