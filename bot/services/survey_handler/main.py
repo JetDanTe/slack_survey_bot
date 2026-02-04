@@ -13,11 +13,12 @@ from shared.services.database.surveys.crud import (
 
 class SurveyHandler:
     async def create_survey(
-        self, survey_name: str, owner_slack_id: str, owner_name: str
+        self, survey_name: str, survey_text: str, owner_slack_id: str, owner_name: str
     ) -> Survey:
         async with async_session_maker() as session:
             survey_data = SurveyCreate(
                 survey_name=survey_name,
+                survey_text=survey_text,
                 owner_slack_id=owner_slack_id,
                 owner_name=owner_name,
             )
@@ -40,3 +41,8 @@ class SurveyHandler:
                 response_data=survey_response_data, session=session
             )
             return survey_response
+
+    async def get_all_surveys(self) -> list[Survey]:
+        async with async_session_maker() as session:
+            surveys = await survey_manager.get_all_surveys(session=session)
+            return surveys
