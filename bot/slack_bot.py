@@ -121,6 +121,7 @@ class AuditBot:
             control_block = SurveyControlBlock(
                 survey_id=s.id,
                 survey_name=s.survey_name,
+                survey_text=s.survey_text,
             )
 
             say(

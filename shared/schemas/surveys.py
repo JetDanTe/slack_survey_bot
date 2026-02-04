@@ -27,7 +27,7 @@ class Survey(Base):
     __tablename__ = "surveys"
 
     survey_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    survey_text: Mapped[str] = mapped_column(Text, nullable=False)
+    survey_text: Mapped[str] = mapped_column(Text, server_default="")
     owner_slack_id: Mapped[str] = mapped_column(String(50), nullable=False)
     owner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True)
