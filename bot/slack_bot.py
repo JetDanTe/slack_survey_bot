@@ -21,7 +21,7 @@ class AuditBot:
 
         # Define bot commands and event handlers
         # Audit control
-        self.app.command("/audit_start")(self.admin_check(self.start_survey))
+        self.app.command("/survey_manager")(self.admin_check(self.show_survey_manager))
         self.app.command("/audit_stop")(self.admin_check(self.close_audit))
         self.app.command("/audit_unanswered")(self.admin_check(self.show_users))
 
@@ -30,6 +30,7 @@ class AuditBot:
         self.app.command("/user_help")(self.show_user_help)
         self.app.command("/admin_show")(self.show_users)
         self.app.message()(self.shadow_answer)
+        self.app.event("message")(self.handle_message_events)
 
         # Admin commands
         self.app.command("/users_update")(self.admin_check(self.update_users))
@@ -84,6 +85,50 @@ class AuditBot:
             say_func=say,
         )
 
+    def show_survey_manager(self, ack, body, say):
+        ack()
+
+        channel_id = body.get("channel_id")
+
+        try:
+            # Get bot's user ID
+            auth_test = self.app.client.auth_test()
+            bot_user_id = auth_test["user_id"]
+
+            # Fetch recent history
+            history = self.app.client.conversations_history(
+                channel=channel_id, limit=20
+            )
+            messages = history.get("messages", [])
+
+            for msg in messages:
+                # Check if message is from this bot and contains "Survey Control Panel"
+                if msg.get("user") == bot_user_id:
+                    blocks_str = str(msg.get("blocks", []))
+                    if "Survey Control Panel" in blocks_str:
+                        try:
+                            self.app.client.chat_delete(
+                                channel=channel_id, ts=msg["ts"]
+                            )
+                        except Exception as e:
+                            print(f"[ERROR] Failed to delete message {msg['ts']}: {e}")
+
+        except Exception as e:
+            print(f"[ERROR] Error cleaning up old messages: {e}")
+
+        surveys = asyncio.run(SurveyHandler().get_all_surveys())
+        for s in surveys:
+            control_block = SurveyControlBlock(
+                survey_id=s.id,
+                survey_name=s.survey_name,
+                survey_text=s.survey_text,
+            )
+
+            say(
+                text=f"Survey '{s.survey_name}':",
+                blocks=control_block.build(),
+            )
+
     def start_survey(self, ack, body, say):
         """Audit process main function"""
         audit_message = body.get("text").splitlines()
@@ -94,6 +139,7 @@ class AuditBot:
         survey = asyncio.run(
             SurveyHandler().create_survey(
                 survey_name=audit_message[0],
+                survey_text=audit_message[1],
                 owner_slack_id=owner_id,
                 owner_name=owner_name,
             )
@@ -116,7 +162,11 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
-        say(f"<@{user_id}> clicked Start for survey ID: `{survey_id}`")
+        thread_ts = body["container"].get("message_ts")
+        say(
+            f"<@{user_id}> clicked Start for survey ID: `{survey_id}`",
+            thread_ts=thread_ts,
+        )
         # TODO: Implement actual survey start logic
 
     def handle_survey_stop(self, ack, body, say):
@@ -124,7 +174,11 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
-        say(f"<@{user_id}> clicked Stop for survey ID: `{survey_id}`")
+        thread_ts = body["container"].get("message_ts")
+        say(
+            f"<@{user_id}> clicked Stop for survey ID: `{survey_id}`",
+            thread_ts=thread_ts,
+        )
         # TODO: Implement actual survey stop logic
 
     def handle_survey_unanswered(self, ack, body, say):
@@ -132,7 +186,11 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
-        say(f"<@{user_id}> requested unanswered list for survey ID: `{survey_id}`")
+        thread_ts = body["container"].get("message_ts")
+        say(
+            f"<@{user_id}> requested unanswered list for survey ID: `{survey_id}`",
+            thread_ts=thread_ts,
+        )
         # TODO: Implement actual unanswered users logic
 
     def handle_user_list_select(self, ack, body, say):
@@ -160,8 +218,10 @@ class AuditBot:
         ack()
         survey_id = body["actions"][0]["value"]
         action_id = body["actions"][0]["action_id"]
+        thread_ts = body["container"].get("message_ts")
         say(
-            f"Empty button `{action_id}` clicked for survey ID: `{survey_id}` (not implemented)"
+            f"Empty button `{action_id}` clicked for survey ID: `{survey_id}` (not implemented)",
+            thread_ts=thread_ts,
         )
 
     # def send_message(self, user_id, message):
@@ -365,6 +425,11 @@ class AuditBot:
             print(f'[DEBUG] Would say: "{message}" to {receiver}')
         else:
             say_func(message, **kwargs)
+
+    def handle_message_events(self, body, logger):
+        """Acknowledge message events (like message_changed) to avoid unhandled warnings."""
+        logger.debug(f"Received message event: {body}")
+        pass
 
     def start(self):
         """Connects to Slack in socket mode"""

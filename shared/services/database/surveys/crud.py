@@ -103,6 +103,17 @@ class SurveyCRUDManager(BaseCRUDManager):
             await session.refresh(survey)
         return survey
 
+    async def get_all_surveys(self, session: AsyncSession) -> list[Survey]:
+        """
+        Get all surveys.
+
+        :param session: Async database session
+        :return: List of Survey instances
+        """
+        query = select(Survey)
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
 
 class SurveyResponseCRUDManager(BaseCRUDManager):
     """
