@@ -8,9 +8,11 @@ from services.user_handler.main import UserHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from shared.services.settings.main import settings
 
-class AuditBot:
-    def __init__(self, settings):
+
+class SurveyBot:
+    def __init__(self):
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
         # Initialize admins
