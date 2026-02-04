@@ -24,6 +24,7 @@ class SurveyControlBlock(BaseModel):
         return [
             self._build_header(),
             self._build_divider(),
+            self._build_input(),
             self._build_actions(),
         ]
 
@@ -56,9 +57,22 @@ class SurveyControlBlock(BaseModel):
                 self._button("Start", "survey_start", style="primary"),
                 self._button("Stop", "survey_stop", style="danger"),
                 self._button("Unanswered", "survey_unanswered"),
-                self._user_list_dropdown(),
                 self._button("Empty btn", "survey_empty_2"),
             ],
+        }
+
+    def _build_input(self) -> dict:
+        """Build input block for user list selection."""
+        return {
+            "type": "input",
+            "block_id": "survey_user_list_block",
+            "element": self._user_list_dropdown(),
+            "label": {
+                "type": "plain_text",
+                "text": "Select User Lists to send the survey to",
+                "emoji": True,
+            },
+            "optional": True,
         }
 
     def _button(self, text: str, action_id: str, style: str | None = None) -> dict:

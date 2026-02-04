@@ -106,10 +106,13 @@ class SurveyBot:
 
         surveys = asyncio.run(SurveyHandler().get_all_surveys())
         for s in surveys:
+            user_lists = asyncio.run(self._get_user_lists_for_block(s.id))
+
             control_block = SurveyControlBlock(
                 survey_id=s.id,
                 survey_name=s.survey_name,
                 survey_text=s.survey_text,
+                available_user_lists=user_lists,
             )
 
             say(
@@ -204,15 +207,22 @@ class SurveyBot:
             return
 
         first_val = selected_options[0]["value"]
+        thread_ts = body["container"].get("message_ts")
         if ":" not in first_val:
-            say(f"<@{user_id}> Error: Invalid option format.")
+            say(
+                f"<@{user_id}> Error: Invalid option format.",
+                thread_ts=thread_ts,
+            )
             return
 
         survey_id_str, _ = first_val.rsplit(":", 1)
         try:
             survey_id = int(survey_id_str)
         except ValueError:
-            say(f"<@{user_id}> Error: Invalid survey ID.")
+            say(
+                f"<@{user_id}> Error: Invalid survey ID.",
+                thread_ts=thread_ts,
+            )
             return
 
         list_ids = []
@@ -228,10 +238,14 @@ class SurveyBot:
         try:
             asyncio.run(self._update_survey_lists(survey_id, list_ids))
             say(
-                f"<@{user_id}> updated lists for survey `{survey_id}`: *{', '.join(list_names)}*"
+                f"<@{user_id}> updated lists for survey `{survey_id}`: *{', '.join(list_names)}*",
+                thread_ts=thread_ts,
             )
         except Exception as e:
-            say(f"<@{user_id}> Error updating lists: {e}")
+            say(
+                f"<@{user_id}> Error updating lists: {e}",
+                thread_ts=thread_ts,
+            )
 
     async def _update_survey_lists(self, survey_id: int, list_ids: tp.List[int]):
         async with async_session_maker() as session:

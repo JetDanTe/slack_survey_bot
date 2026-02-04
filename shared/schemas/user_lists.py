@@ -11,6 +11,7 @@ from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.schemas.base_models import Base
+from shared.schemas.users import Slack_User
 
 # =============================================================================
 # SQLAlchemy Models
@@ -52,14 +53,15 @@ class UserListMember(Base):
     user_list_id: Mapped[int] = mapped_column(
         ForeignKey("user_lists.id"), nullable=False
     )
-    slack_id: Mapped[str] = mapped_column(String(50), nullable=False)
-    user_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("slack_users.id"), nullable=False)
 
     # Relationship back to list
     user_list: Mapped["UserList"] = relationship("UserList", back_populates="members")
+    # Relationship to user
+    user: Mapped["Slack_User"] = relationship("Slack_User")
 
     __table_args__ = (
-        UniqueConstraint("user_list_id", "slack_id", name="uq_user_list_member"),
+        UniqueConstraint("user_list_id", "user_id", name="uq_user_list_member"),
     )
 
 
@@ -89,8 +91,7 @@ class UserListRead(BaseModel):
 class UserListMemberAdd(BaseModel):
     """Schema for adding a member to a list."""
 
-    slack_id: str = Field(..., min_length=1, max_length=50)
-    user_name: str = Field(..., min_length=1, max_length=255)
+    user_id: int = Field(..., description="ID of the user in slack_users table")
 
 
 class UserListMemberRead(BaseModel):
@@ -100,5 +101,4 @@ class UserListMemberRead(BaseModel):
 
     id: int
     user_list_id: int
-    slack_id: str
-    user_name: str
+    user_id: int
