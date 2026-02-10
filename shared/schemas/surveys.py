@@ -5,6 +5,7 @@ SQLAlchemy models for database tables and Pydantic schemas for validation.
 """
 
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Column, ForeignKey, String, Table, Text
@@ -38,6 +39,8 @@ class Survey(Base):
     owner_slack_id: Mapped[str] = mapped_column(String(50), nullable=False)
     owner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True)
+    users_incl: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    users_excl: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # user_lists: Mapped[list["UserList"]] = relationship(
     #     "UserList", secondary=survey_user_lists, back_populates="surveys"
@@ -79,6 +82,8 @@ class SurveyCreate(BaseModel):
     survey_text: str = Field(..., min_length=1)
     owner_slack_id: str = Field(..., min_length=1, max_length=50)
     owner_name: str = Field(..., min_length=1, max_length=255)
+    users_incl: Optional[str] = None
+    users_excl: Optional[str] = None
 
 
 class SurveyRead(BaseModel):
@@ -93,6 +98,8 @@ class SurveyRead(BaseModel):
     is_active: bool
     created_at: datetime
     slack_id: str
+    users_incl: Optional[str] = None
+    users_excl: Optional[str] = None
     # Note: user_list_ids not included by default to avoid complexity in fetching unless requested
 
 
