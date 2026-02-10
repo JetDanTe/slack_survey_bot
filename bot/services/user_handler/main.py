@@ -18,6 +18,15 @@ class UserHandler:
                 return user.realname
             return None
 
+    async def get_user_by_slack_id(self, slack_id: str) -> tp.Optional[Slack_User]:
+        """
+        Retrieves a user object by their Slack ID.
+        """
+        async with async_session_maker() as session:
+            return await user_manager.get(
+                session=session, field=Slack_User.slack_id, field_value=slack_id
+            )
+
     async def update_users(self, slack_users: tp.List[tp.Dict]):
         """
         Updates local database with users from Slack.
