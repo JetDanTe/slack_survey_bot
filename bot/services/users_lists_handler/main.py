@@ -40,3 +40,30 @@ class UsersListsHandler:
         """Remove specific users from a list by their slack IDs."""
         async with async_session_maker() as session:
             await user_list_manager.remove_members(list_id, slack_ids, session)
+
+    async def ensure_default_lists(self) -> None:
+        """
+        Verify that default user lists exist, creating them if necessary.
+        Currently handles:
+        - "all": Includes all active (non-deleted) users from the database.
+        """
+        from shared.services.database.users.crud import user_manager
+
+        async with async_session_maker() as session:
+            all_list = await user_list_manager.get_user_list_by_name("all", session)
+
+            if not all_list:
+                print("INFO: Creating default 'all' user list...")
+                all_list = await self.create_user_list(
+                    name="all", description="All active users"
+                )
+
+                active_users = await user_manager.get_active_users(session)
+
+                if active_users:
+                    slack_ids = [u.slack_id for u in active_users]
+                    user_names = [u.realname for u in active_users]
+                    await self.update_list_members(all_list.id, slack_ids, user_names)
+                    print(f"INFO: Added {len(slack_ids)} users to 'all' list.")
+            else:
+                print("INFO: Default 'all' user list already exists.")

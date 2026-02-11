@@ -24,5 +24,12 @@ class UserCRUD_Manager(BaseCRUDManager):
         new_user = await self.create(session=session, **user_fields)
         return new_user
 
+    async def get_active_users(self, session: AsyncSession) -> list[Slack_User]:
+        from sqlalchemy import select
+
+        query = select(Slack_User).filter(not Slack_User.is_deleted)
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
 
 user_manager = UserCRUD_Manager()

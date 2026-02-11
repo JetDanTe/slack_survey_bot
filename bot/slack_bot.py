@@ -5,6 +5,7 @@ from handlers.common import CommonHandler
 from handlers.survey import SurveyHandler
 from handlers.user_lists import UserListHandler
 from services.admin.main import AdminHandler
+from services.users_lists_handler.main import UsersListsHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
@@ -24,10 +25,13 @@ class SurveyBot:
         self.survey_handler = SurveyHandler(self)
         self.user_list_handler = UserListHandler(self)
 
-        # Register Handlers
+        # Initialize Handlers
         self.common_handler.register()
         self.survey_handler.register()
         self.user_list_handler.register()
+
+        # Initialize User Lists
+        asyncio.run(self.initialize_user_lists())
 
         # Socket mode handler to connect the bot to Slack
         self.handler = SocketModeHandler(self.app, settings.SLACK_APP_TOKEN)
@@ -39,6 +43,13 @@ class SurveyBot:
         handler = AdminHandler(settings)
         await handler.setup_first_admin()
         return await handler.get_all_admins()
+
+    async def initialize_user_lists(self):
+        """
+        Setup default user lists if they don't exist.
+        """
+        handler = UsersListsHandler()
+        await handler.ensure_default_lists()
 
     def admin_check(self, func):
         """Decorator to check if the command is issued by an admin."""
