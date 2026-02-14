@@ -29,7 +29,7 @@ class SurveyResponseBlock(BaseModel):
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"📝 *{self.survey_name}*\n{self.question_text}",
+                "text": f"*{self.survey_name}*\n{self.question_text}",
             },
         }
 
@@ -63,7 +63,7 @@ class SurveyResponseBlock(BaseModel):
             "elements": [
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "✅ Submit", "emoji": True},
+                    "text": {"type": "plain_text", "text": "Submit", "emoji": True},
                     "style": "primary",
                     "action_id": "survey_submit_answer",
                     "value": str(self.survey_id),
