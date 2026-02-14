@@ -46,3 +46,9 @@ class SurveyHandler:
         async with async_session_maker() as session:
             surveys = await survey_manager.get_all_surveys(session=session)
             return surveys
+
+    async def close_survey(self, survey_id: int) -> Survey:
+        async with async_session_maker() as session:
+            return await survey_manager.close_survey(
+                survey_id=survey_id, session=session
+            )

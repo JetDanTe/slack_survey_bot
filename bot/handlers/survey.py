@@ -131,11 +131,32 @@ class SurveyHandler(BaseHandler):
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
         thread_ts = body["container"].get("message_ts")
-        say(
-            f"<@{user_id}> clicked Stop for survey ID: `{survey_id}`",
-            thread_ts=thread_ts,
-        )
-        # TODO: Implement actual survey stop logic
+        channel_id = body["container"].get("channel_id")
+
+        async def stop_survey():
+            try:
+                survey = await Sh().close_survey(int(survey_id))
+                if survey:
+                    say(
+                        f"Survey '{survey.survey_name}' stopped by <@{user_id}>",
+                        thread_ts=thread_ts,
+                    )
+                    try:
+                        self.app.client.chat_delete(channel=channel_id, ts=thread_ts)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to delete survey control panel: {e}")
+                else:
+                    say(
+                        f"Survey with ID {survey_id} not found.",
+                        thread_ts=thread_ts,
+                    )
+            except Exception as e:
+                say(
+                    f"Error stopping survey: {e}",
+                    thread_ts=thread_ts,
+                )
+
+        asyncio.run(stop_survey())
 
     def handle_survey_unanswered(self, ack, body, say):
         """Handle the Unanswered button click."""
@@ -156,7 +177,6 @@ class SurveyHandler(BaseHandler):
         survey_id = int(body["actions"][0]["value"])
         thread_ts = body["container"].get("message_ts")
 
-        # Extract selected options from state
         state_values = body.get("state", {}).get("values", {})
 
         incl_list_ids = []
