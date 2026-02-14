@@ -2,7 +2,11 @@ import asyncio
 import typing as tp
 
 from handlers.base import BaseHandler
-from services.slack_block_handler import SurveyControlBlock, SurveyResponseBlock
+from services.slack_block_handler import (
+    SurveyControlBlock,
+    SurveyCreationModal,
+    SurveyResponseBlock,
+)
 from services.survey_handler.main import SurveyHandler as Sh
 from services.user_handler.main import UserHandler
 
@@ -26,6 +30,9 @@ class SurveyHandler(BaseHandler):
         self.app.command("/survey_manager")(
             self.bot.admin_check(self.show_survey_manager)
         )
+        self.app.command("/survey_create")(self.handle_survey_create_command)
+        self.app.view("survey_create_modal")(self.handle_survey_create_submission)
+
         self.app.action("survey_start")(self.handle_survey_start)
         self.app.action("survey_stop")(self.handle_survey_stop)
         self.app.action("survey_unanswered")(self.handle_survey_unanswered)
@@ -120,6 +127,104 @@ class SurveyHandler(BaseHandler):
         async with async_session_maker() as session:
             lists = await user_list_manager.get_all_user_lists(session)
             return [{"text": ul.name, "value": f"{survey_id}:{ul.id}"} for ul in lists]
+
+    async def _get_user_lists_for_modal(self) -> tp.List[tp.Dict[str, str]]:
+        """Helper to fetch user lists for modal options."""
+        async with async_session_maker() as session:
+            lists = await user_list_manager.get_all_user_lists(session)
+            return [
+                {"text": {"type": "plain_text", "text": ul.name}, "value": str(ul.id)}
+                for ul in lists
+            ]
+
+    def handle_survey_create_command(self, ack, body, client):
+        """Handle /survey_create command to open modal."""
+        ack()
+        user_lists = asyncio.run(self._get_user_lists_for_modal())
+        channel_id = body.get("channel_id")
+
+        modal = SurveyCreationModal(channel_id=channel_id, user_lists=user_lists)
+
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view=modal.build(),
+        )
+
+    def handle_survey_create_submission(self, ack, body, view, client):
+        """Handle survey creation modal submission."""
+        ack()
+        user_id = body["user"]["id"]
+        channel_id = view.get("private_metadata")
+        values = view["state"]["values"]
+
+        survey_name = values["survey_name_block"]["survey_name_input"]["value"]
+        survey_text = values["survey_text_block"]["survey_text_input"]["value"]
+
+        incl_ids = []
+        if (
+            "survey_include_block" in values
+            and values["survey_include_block"]["survey_include_select"][
+                "selected_options"
+            ]
+        ):
+            incl_ids = [
+                opt["value"]
+                for opt in values["survey_include_block"]["survey_include_select"][
+                    "selected_options"
+                ]
+            ]
+
+        excl_ids = []
+        if (
+            "survey_exclude_block" in values
+            and values["survey_exclude_block"]["survey_exclude_select"][
+                "selected_options"
+            ]
+        ):
+            excl_ids = [
+                opt["value"]
+                for opt in values["survey_exclude_block"]["survey_exclude_select"][
+                    "selected_options"
+                ]
+            ]
+
+        users_incl = ",".join(incl_ids) if incl_ids else None
+        users_excl = ",".join(excl_ids) if excl_ids else None
+
+        survey = asyncio.run(
+            Sh().create_survey(
+                survey_name=survey_name,
+                survey_text=survey_text,
+                owner_slack_id=user_id,
+                owner_name=body["user"]["name"],
+            )
+        )
+
+        if users_incl or users_excl:
+            asyncio.run(
+                self._update_survey_moderation_lists(survey.id, users_incl, users_excl)
+            )
+            survey.users_incl = users_incl
+            survey.users_excl = users_excl
+
+        all_lists = asyncio.run(self._get_user_lists_for_block(survey.id))
+
+        control_block = SurveyControlBlock(
+            survey_id=survey.id,
+            survey_name=survey.survey_name,
+            survey_text=survey.survey_text,
+            available_user_lists=all_lists,
+            current_users_incl=incl_ids,
+            current_users_excl=excl_ids,
+        )
+
+        target_channel = channel_id if channel_id else user_id
+
+        client.chat_postMessage(
+            channel=target_channel,
+            text=f"Survey '{survey.survey_name}' created!",
+            blocks=control_block.build(),
+        )
 
     def handle_survey_start(self, ack, body, say):
         """Handle the Start button click."""
