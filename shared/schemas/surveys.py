@@ -51,6 +51,10 @@ class Survey(Base):
         "SurveyResponse", back_populates="survey", cascade="all, delete-orphan"
     )
 
+    sent_messages: Mapped[list["SurveySentMessage"]] = relationship(
+        "SurveySentMessage", back_populates="survey", cascade="all, delete-orphan"
+    )
+
 
 class SurveyResponse(Base):
     """
@@ -68,6 +72,21 @@ class SurveyResponse(Base):
 
     # Relationship back to survey
     survey: Mapped["Survey"] = relationship("Survey", back_populates="responses")
+
+
+class SurveySentMessage(Base):
+    """
+    Track sent survey messages to allow deletion.
+    """
+
+    __tablename__ = "survey_sent_messages"
+
+    survey_id: Mapped[int] = mapped_column(ForeignKey("surveys.id"), nullable=False)
+    receiver_slack_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    message_ts: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # Relationship back to survey (optional but good for cascade delete)
+    survey: Mapped["Survey"] = relationship("Survey", back_populates="sent_messages")
 
 
 # =============================================================================
@@ -110,6 +129,14 @@ class SurveyResponseCreate(BaseModel):
     responder_slack_id: str = Field(..., min_length=1, max_length=50)
     responder_name: str = Field(..., min_length=1, max_length=255)
     answer: str = Field(..., min_length=1)
+
+
+class SurveySentMessageCreate(BaseModel):
+    """Schema for creating a sent message record."""
+
+    survey_id: int
+    receiver_slack_id: str
+    message_ts: str
 
 
 class SurveyResponseRead(BaseModel):
