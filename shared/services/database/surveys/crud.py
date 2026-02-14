@@ -15,6 +15,8 @@ from shared.schemas.surveys import (
     SurveyCreate,
     SurveyResponse,
     SurveyResponseCreate,
+    SurveySentMessage,
+    SurveySentMessageCreate,
 )
 from shared.schemas.user_lists import UserList
 from shared.services.database.core.base_crud import BaseCRUDManager
@@ -154,6 +156,17 @@ class SurveyCRUDManager(BaseCRUDManager):
         result = await session.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_active_surveys(self, session: AsyncSession) -> list[Survey]:
+        """
+        Get all currently active surveys.
+
+        :param session: Async database session
+        :return: List of active Survey instances
+        """
+        query = select(Survey).filter(Survey.is_active == True)  # noqa: E712
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
     async def close_survey(
         self, survey_id: int, session: AsyncSession
     ) -> Optional[Survey]:
@@ -250,9 +263,60 @@ class SurveyResponseCRUDManager(BaseCRUDManager):
             SurveyResponse.responder_slack_id == responder_slack_id,
         )
         result = await session.execute(query)
-        return result.scalar_one_or_none() is not None
+        return result.scalars().first() is not None
+
+
+class SurveySentMessageCRUDManager(BaseCRUDManager):
+    """
+    CRUD manager for SurveySentMessage operations.
+    """
+
+    def __init__(self, model=None):
+        self.model = model or SurveySentMessage
+
+    async def add_sent_message(
+        self, sent_data: SurveySentMessageCreate, session: AsyncSession
+    ) -> SurveySentMessage:
+        """
+        Record a sent survey message.
+
+        :param sent_data: Data for the sent message
+        :param session: Async database session
+        :return: Created SurveySentMessage instance
+        """
+        sent_msg = SurveySentMessage(
+            survey_id=sent_data.survey_id,
+            receiver_slack_id=sent_data.receiver_slack_id,
+            message_ts=sent_data.message_ts,
+            slack_id=sent_data.receiver_slack_id,  # Required by Base model
+        )
+        session.add(sent_msg)
+        try:
+            await session.commit()
+            await session.refresh(sent_msg)
+            return sent_msg
+        except Exception as e:
+            await session.rollback()
+            raise Exception(f"Error adding sent message record: {e}")
+
+    async def get_sent_messages(
+        self, survey_id: int, session: AsyncSession
+    ) -> List[SurveySentMessage]:
+        """
+        Get all sent messages for a survey.
+
+        :param survey_id: Survey ID
+        :param session: Async database session
+        :return: List of SurveySentMessage instances
+        """
+        query = select(SurveySentMessage).filter(
+            SurveySentMessage.survey_id == survey_id
+        )
+        result = await session.execute(query)
+        return list(result.scalars().all())
 
 
 # Singleton instances for convenience
 survey_manager = SurveyCRUDManager()
 survey_response_manager = SurveyResponseCRUDManager()
+survey_sent_message_manager = SurveySentMessageCRUDManager()
