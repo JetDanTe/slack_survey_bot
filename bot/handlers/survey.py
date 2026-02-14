@@ -32,6 +32,8 @@ class SurveyHandler(BaseHandler):
         self.app.action("survey_set_lists")(self.handle_set_users_lists)
         self.app.action("survey_submit_answer")(self.handle_survey_submit)
         self.app.action("survey_empty_2")(self.handle_survey_empty)
+        self.app.action("survey_user_list_include")(self.handle_list_selection_change)
+        self.app.action("survey_user_list_exclude")(self.handle_list_selection_change)
 
     def show_survey_manager(self, ack, body, say):
         ack()
@@ -279,18 +281,20 @@ class SurveyHandler(BaseHandler):
         incl_list_names = []
         excl_list_names = []
 
+        incl_block_id = "survey_user_list_include_block"
+        excl_block_id = "survey_user_list_exclude_block"
+
+        incl_action_id = "survey_user_list_include"
+        excl_action_id = "survey_user_list_exclude"
+
         for block_id, actions in state_values.items():
-            if block_id == "survey_user_list_include_block":
-                options = actions.get("survey_user_list_include", {}).get(
-                    "selected_options", []
-                )
+            if block_id == incl_block_id:
+                options = actions.get(incl_action_id, {}).get("selected_options", [])
                 for opt in options:
                     incl_list_ids.append(opt["value"].split(":")[1])
                     incl_list_names.append(opt["text"]["text"])
-            elif block_id == "survey_user_list_exclude_block":
-                options = actions.get("survey_user_list_exclude", {}).get(
-                    "selected_options", []
-                )
+            elif block_id == excl_block_id:
+                options = actions.get(excl_action_id, {}).get("selected_options", [])
                 for opt in options:
                     excl_list_ids.append(opt["value"].split(":")[1])
                     excl_list_names.append(opt["text"]["text"])
@@ -313,6 +317,52 @@ class SurveyHandler(BaseHandler):
                 f"<@{user_id}> Error updating moderation lists: {e}",
                 thread_ts=thread_ts,
             )
+
+    def handle_list_selection_change(self, ack, body, say):
+        """Handle immediate user list selection changes."""
+        ack()
+
+        survey_id = None
+        blocks = body.get("message", {}).get("blocks", [])
+        for block in blocks:
+            if block.get("type") == "actions":
+                elements = block.get("elements", [])
+                for element in elements:
+                    if element.get("action_id") == "survey_start":
+                        try:
+                            survey_id = int(element.get("value"))
+                            break
+                        except (ValueError, TypeError):
+                            pass
+                if survey_id is not None:
+                    break
+
+        if survey_id is None:
+            print("[ERROR] Could not determine survey_id from message blocks.")
+            return
+
+        state_values = body.get("state", {}).get("values", {})
+
+        def get_selected_ids(mode):
+            block_id = f"survey_user_list_{mode}_block"
+            action_key = f"survey_user_list_{mode}"
+
+            options = (
+                state_values.get(block_id, {})
+                .get(action_key, {})
+                .get("selected_options", [])
+            )
+            return [opt["value"].split(":")[1] for opt in options]
+
+        incl_ids = get_selected_ids("include")
+        excl_ids = get_selected_ids("exclude")
+
+        users_incl = ",".join(incl_ids) if incl_ids else None
+        users_excl = ",".join(excl_ids) if excl_ids else None
+
+        asyncio.run(
+            self._update_survey_moderation_lists(survey_id, users_incl, users_excl)
+        )
 
     async def _update_survey_moderation_lists(
         self, survey_id: int, users_incl: tp.Optional[str], users_excl: tp.Optional[str]
