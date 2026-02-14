@@ -93,6 +93,37 @@ class SurveyCRUDManager(BaseCRUDManager):
         await session.refresh(survey)
         return survey
 
+    async def update_survey_moderation_lists(
+        self,
+        survey_id: int,
+        users_incl: Optional[str],
+        users_excl: Optional[str],
+        session: AsyncSession,
+    ) -> Survey:
+        """
+        Update the moderation lists for a survey.
+
+        :param survey_id: ID of the survey
+        :param users_incl: Comma-separated user list IDs to include
+        :param users_excl: Comma-separated user list IDs to exclude
+        :param session: Async database session
+        :return: Updated Survey instance
+        """
+        survey = await self.get_survey_by_id(survey_id, session)
+        if not survey:
+            raise Exception("Survey not found")
+
+        survey.users_incl = users_incl
+        survey.users_excl = users_excl
+        session.add(survey)
+        try:
+            await session.commit()
+            await session.refresh(survey)
+            return survey
+        except Exception as e:
+            await session.rollback()
+            raise Exception(f"Error updating survey moderation lists: {e}")
+
     async def get_survey_by_id(
         self, survey_id: int, session: AsyncSession, include_responses: bool = False
     ) -> Optional[Survey]:

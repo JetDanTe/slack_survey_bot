@@ -24,7 +24,7 @@ class SurveyHandler(BaseHandler):
         self.app.action("survey_start")(self.handle_survey_start)
         self.app.action("survey_stop")(self.handle_survey_stop)
         self.app.action("survey_unanswered")(self.handle_survey_unanswered)
-        self.app.action("survey_user_list")(self.handle_user_list_select)
+        self.app.action("survey_set_lists")(self.handle_set_users_lists)
         self.app.action("survey_empty_2")(self.handle_survey_empty)
 
     def show_survey_manager(self, ack, body, say):
@@ -58,11 +58,16 @@ class SurveyHandler(BaseHandler):
         for s in surveys:
             user_lists = asyncio.run(self._get_user_lists_for_block(s.id))
 
+            incl_ids = s.users_incl.split(",") if s.users_incl else []
+            excl_ids = s.users_excl.split(",") if s.users_excl else []
+
             control_block = SurveyControlBlock(
                 survey_id=s.id,
                 survey_name=s.survey_name,
                 survey_text=s.survey_text,
                 available_user_lists=user_lists,
+                current_users_incl=incl_ids,
+                current_users_excl=excl_ids,
             )
 
             say(
@@ -144,59 +149,63 @@ class SurveyHandler(BaseHandler):
         )
         # TODO: Implement actual unanswered users logic
 
-    def handle_user_list_select(self, ack, body, say):
-        """Handle the User List dropdown selection."""
+    def handle_set_users_lists(self, ack, body, say):
+        """Handle the Set Users lists button click."""
         ack()
         user_id = body["user"]["id"]
-
-        selected_options = body["actions"][0].get("selected_options")
-
-        if not selected_options:
-            return
-
-        first_val = selected_options[0]["value"]
+        survey_id = int(body["actions"][0]["value"])
         thread_ts = body["container"].get("message_ts")
-        if ":" not in first_val:
-            say(
-                f"<@{user_id}> Error: Invalid option format.",
-                thread_ts=thread_ts,
-            )
-            return
 
-        survey_id_str, _ = first_val.rsplit(":", 1)
+        # Extract selected options from state
+        state_values = body.get("state", {}).get("values", {})
+
+        incl_list_ids = []
+        excl_list_ids = []
+        incl_list_names = []
+        excl_list_names = []
+
+        for block_id, actions in state_values.items():
+            if block_id == "survey_user_list_include_block":
+                options = actions.get("survey_user_list_include", {}).get(
+                    "selected_options", []
+                )
+                for opt in options:
+                    incl_list_ids.append(opt["value"].split(":")[1])
+                    incl_list_names.append(opt["text"]["text"])
+            elif block_id == "survey_user_list_exclude_block":
+                options = actions.get("survey_user_list_exclude", {}).get(
+                    "selected_options", []
+                )
+                for opt in options:
+                    excl_list_ids.append(opt["value"].split(":")[1])
+                    excl_list_names.append(opt["text"]["text"])
+
+        users_incl = ",".join(incl_list_ids) if incl_list_ids else None
+        users_excl = ",".join(excl_list_ids) if excl_list_ids else None
+
         try:
-            survey_id = int(survey_id_str)
-        except ValueError:
-            say(
-                f"<@{user_id}> Error: Invalid survey ID.",
-                thread_ts=thread_ts,
+            asyncio.run(
+                self._update_survey_moderation_lists(survey_id, users_incl, users_excl)
             )
-            return
-
-        list_ids = []
-        list_names = []
-        for opt in selected_options:
-            val = opt["value"]
-            parts = val.rsplit(":", 1)
-            if len(parts) == 2:
-                list_ids.append(int(parts[1]))
-                list_names.append(opt["text"]["text"])
-
-        try:
-            asyncio.run(self._update_survey_lists(survey_id, list_ids))
             say(
-                f"<@{user_id}> updated lists for survey `{survey_id}`: *{', '.join(list_names)}*",
+                f"<@{user_id}> moderation lists updated for survey `{survey_id}`.\n"
+                f"Include: *{', '.join(incl_list_names) if incl_list_names else 'None'}*\n"
+                f"Exclude: *{', '.join(excl_list_names) if excl_list_names else 'None'}*",
                 thread_ts=thread_ts,
             )
         except Exception as e:
             say(
-                f"<@{user_id}> Error updating lists: {e}",
+                f"<@{user_id}> Error updating moderation lists: {e}",
                 thread_ts=thread_ts,
             )
 
-    async def _update_survey_lists(self, survey_id: int, list_ids: tp.List[int]):
+    async def _update_survey_moderation_lists(
+        self, survey_id: int, users_incl: tp.Optional[str], users_excl: tp.Optional[str]
+    ):
         async with async_session_maker() as session:
-            await survey_manager.update_survey_user_lists(survey_id, list_ids, session)
+            await survey_manager.update_survey_moderation_lists(
+                survey_id, users_incl, users_excl, session
+            )
 
     def handle_survey_empty(self, ack, body, say):
         """Handle empty button clicks (placeholder for future functionality)."""
