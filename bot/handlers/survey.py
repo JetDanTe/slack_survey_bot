@@ -1,6 +1,8 @@
 import asyncio
+import io
 import typing as tp
 
+import pandas as pd
 from handlers.base import BaseHandler
 from services.slack_block_handler import (
     SurveyControlBlock,
@@ -322,6 +324,48 @@ class SurveyHandler(BaseHandler):
             try:
                 survey = await Sh().close_survey(int(survey_id))
                 if survey:
+                    # Fetch responses and generate report
+                    async with async_session_maker() as session:
+                        responses = (
+                            await survey_response_manager.get_responses_by_survey(
+                                int(survey_id), session
+                            )
+                        )
+
+                    if responses:
+                        data = []
+                        for response in responses:
+                            data.append(
+                                {
+                                    "User Real Name": response.responder_name,
+                                    "Response": response.answer,
+                                }
+                            )
+
+                        df = pd.DataFrame(data)
+
+                        # Create Excel file in memory
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                            df.to_excel(writer, index=False, sheet_name="Responses")
+                        output.seek(0)
+
+                        try:
+                            self.app.client.files_upload_v2(
+                                channel=channel_id,
+                                thread_ts=thread_ts,
+                                title=f"Survey Results - {survey.survey_name}",
+                                filename=f"survey_results_{survey_id}.xlsx",
+                                file=output,
+                                initial_comment=f"Here are the results for survey '{survey.survey_name}'",
+                            )
+                        except Exception as e:
+                            print(f"[ERROR] Failed to upload survey results: {e}")
+                            say(
+                                f"Failed to upload survey results: {e}",
+                                thread_ts=thread_ts,
+                            )
+
                     say(
                         f"Survey '{survey.survey_name}' stopped by <@{user_id}>",
                         thread_ts=thread_ts,
