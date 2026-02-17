@@ -4,6 +4,7 @@ Survey CRUD Manager.
 Provides async CRUD operations for Survey and SurveyResponse models.
 """
 
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -49,16 +50,8 @@ class SurveyCRUDManager(BaseCRUDManager):
             owner_name=survey_data.owner_name,
             slack_id=survey_data.owner_slack_id,  # Required by Base model
             is_active=True,
+            reminder_interval_hours=survey_data.reminder_interval_hours,
         )
-        # if survey_data.user_list_ids:
-        #     query = select(UserList).filter(UserList.id.in_(survey_data.user_list_ids))
-        #     result = await session.execute(query)
-        #     user_lists = result.scalars().all()
-        #     if not user_lists:
-        #          # Should we fail or just continue? Failing seems safer as user requested specific lists.
-        #          # But for now let's just add what we found.
-        #          pass
-        #     survey.user_lists = list(user_lists)
 
         session.add(survey)
         try:
@@ -196,6 +189,51 @@ class SurveyCRUDManager(BaseCRUDManager):
         query = select(Survey)
         result = await session.execute(query)
         return list(result.scalars().all())
+
+    async def get_surveys_needing_reminder(self, session: AsyncSession) -> list[Survey]:
+        """
+        Get active surveys that are due for a reminder.
+
+        Returns surveys where:
+        - is_active is True
+        - reminder_interval_hours > 0
+        - enough time has passed since last_reminder_sent_at (or created_at)
+        """
+        query = select(Survey).filter(
+            Survey.is_active == True,  # noqa: E712
+            Survey.reminder_interval_hours > 0,
+        )
+        result = await session.execute(query)
+        surveys = list(result.scalars().all())
+
+        now = datetime.utcnow()
+        due_surveys = []
+        for survey in surveys:
+            reference_time = survey.last_reminder_sent_at or survey.created_at
+            interval = timedelta(hours=survey.reminder_interval_hours)
+            if now - reference_time >= interval:
+                due_surveys.append(survey)
+        return due_surveys
+
+    async def update_reminder_status(
+        self, survey_id: int, session: AsyncSession
+    ) -> Optional[Survey]:
+        """
+        Update the reminder tracking fields after sending reminders.
+        """
+        survey = await self.get_survey_by_id(survey_id, session)
+        if not survey:
+            return None
+        survey.last_reminder_sent_at = datetime.utcnow()
+        survey.reminders_sent_count = (survey.reminders_sent_count or 0) + 1
+        session.add(survey)
+        try:
+            await session.commit()
+            await session.refresh(survey)
+            return survey
+        except Exception as e:
+            await session.rollback()
+            raise Exception(f"Error updating reminder status: {e}")
 
 
 class SurveyResponseCRUDManager(BaseCRUDManager):

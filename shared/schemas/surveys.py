@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Column, ForeignKey, String, Table, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.schemas.base_models import Base
@@ -41,12 +41,12 @@ class Survey(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     users_incl: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     users_excl: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reminder_interval_hours: Mapped[float] = mapped_column(Float, default=0)
+    last_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    reminders_sent_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    # user_lists: Mapped[list["UserList"]] = relationship(
-    #     "UserList", secondary=survey_user_lists, back_populates="surveys"
-    # )
-
-    # Relationship to responses
     responses: Mapped[list["SurveyResponse"]] = relationship(
         "SurveyResponse", back_populates="survey", cascade="all, delete-orphan"
     )
@@ -103,6 +103,7 @@ class SurveyCreate(BaseModel):
     owner_name: str = Field(..., min_length=1, max_length=255)
     users_incl: Optional[str] = None
     users_excl: Optional[str] = None
+    reminder_interval_hours: float = Field(default=0, ge=0)
 
 
 class SurveyRead(BaseModel):
@@ -119,7 +120,9 @@ class SurveyRead(BaseModel):
     slack_id: str
     users_incl: Optional[str] = None
     users_excl: Optional[str] = None
-    # Note: user_list_ids not included by default to avoid complexity in fetching unless requested
+    reminder_interval_hours: float = 0
+    last_reminder_sent_at: Optional[datetime] = None
+    reminders_sent_count: int = 0
 
 
 class SurveyResponseCreate(BaseModel):

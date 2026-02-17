@@ -5,6 +5,7 @@ from handlers.common import CommonHandler
 from handlers.survey import SurveyHandler
 from handlers.user_lists import UserListHandler
 from services.admin.main import AdminHandler
+from services.reminder_service import ReminderService
 from services.users_lists_handler.main import UsersListsHandler
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -35,6 +36,9 @@ class SurveyBot:
 
         # Socket mode handler to connect the bot to Slack
         self.handler = SocketModeHandler(self.app, settings.SLACK_APP_TOKEN)
+
+        # Initialize Reminder Service
+        self.reminder_service = ReminderService(self.app)
 
     async def initialize_admins(self, settings) -> tp.List[str]:
         """
@@ -78,4 +82,5 @@ class SurveyBot:
         print(
             f"[INFO] Starting bot in {'DEBUG' if self.debug else 'PRODUCTION'} mode..."
         )
+        self.reminder_service.start()
         self.handler.start()

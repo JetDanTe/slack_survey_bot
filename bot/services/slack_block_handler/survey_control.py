@@ -24,6 +24,12 @@ class SurveyControlBlock(BaseModel):
     current_users_excl: List[str] = Field(
         default_factory=list, description="IDs of currently excluded user lists"
     )
+    reminder_interval_hours: float = Field(
+        default=0, description="Hours between reminders (0 = disabled)"
+    )
+    reminders_sent_count: int = Field(
+        default=0, description="Number of reminders sent so far"
+    )
 
     def build(self) -> list:
         """Build complete Slack blocks for survey control panel."""
@@ -44,6 +50,11 @@ class SurveyControlBlock(BaseModel):
         )
         if self.survey_text:
             text += f"\n\n`{self.survey_text}`"
+        if self.reminder_interval_hours and self.reminder_interval_hours > 0:
+            text += (
+                f"\n:bell: Reminders every *{self.reminder_interval_hours}h* "
+                f"(sent *{self.reminders_sent_count}* so far)"
+            )
         return {
             "type": "section",
             "text": {
@@ -58,14 +69,17 @@ class SurveyControlBlock(BaseModel):
 
     def _build_actions(self) -> dict:
         """Build actions block with control elements."""
+        elements = [
+            self._button("Start", "survey_start", style="primary"),
+            self._button("Stop", "survey_stop", style="danger"),
+            self._button("Unanswered", "survey_unanswered"),
+            self._button("Set Users lists", "survey_set_lists"),
+        ]
+        if self.reminder_interval_hours and self.reminder_interval_hours > 0:
+            elements.append(self._button(":bell: Remind Now", "survey_remind_now"))
         return {
             "type": "actions",
-            "elements": [
-                self._button("Start", "survey_start", style="primary"),
-                self._button("Stop", "survey_stop", style="danger"),
-                self._button("Unanswered", "survey_unanswered"),
-                self._button("Set Users lists", "survey_set_lists"),
-            ],
+            "elements": elements,
         }
 
     def _build_input(self, mode: str) -> dict:
