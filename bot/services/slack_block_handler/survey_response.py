@@ -15,6 +15,9 @@ class SurveyResponseBlock(BaseModel):
     question_text: str = Field(
         default="Please provide your answer:", description="Question prompt for user"
     )
+    is_submitted: bool = Field(
+        default=False, description="Has the survey been submitted?"
+    )
 
     def build(self) -> list:
         """Build complete Slack blocks for user response."""
@@ -58,12 +61,16 @@ class SurveyResponseBlock(BaseModel):
 
     def _build_submit_button(self) -> dict:
         """Build submit button for the response."""
+        button_text = "Submit"
+        if self.is_submitted:
+            button_text = "Submitted :white_check_mark:"
+
         return {
             "type": "actions",
             "elements": [
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "Submit", "emoji": True},
+                    "text": {"type": "plain_text", "text": button_text, "emoji": True},
                     "style": "primary",
                     "action_id": "survey_submit_answer",
                     "value": str(self.survey_id),

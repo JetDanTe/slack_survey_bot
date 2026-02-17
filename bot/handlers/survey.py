@@ -324,7 +324,6 @@ class SurveyHandler(BaseHandler):
             try:
                 survey = await Sh().close_survey(int(survey_id))
                 if survey:
-                    # Fetch responses and generate report
                     async with async_session_maker() as session:
                         responses = (
                             await survey_response_manager.get_responses_by_survey(
@@ -344,7 +343,6 @@ class SurveyHandler(BaseHandler):
 
                         df = pd.DataFrame(data)
 
-                        # Create Excel file in memory
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine="openpyxl") as writer:
                             df.to_excel(writer, index=False, sheet_name="Responses")
@@ -407,14 +405,56 @@ class SurveyHandler(BaseHandler):
     def handle_survey_unanswered(self, ack, body, say):
         """Handle the Unanswered button click."""
         ack()
-        survey_id = body["actions"][0]["value"]
+        survey_id = int(body["actions"][0]["value"])
         user_id = body["user"]["id"]
         thread_ts = body["container"].get("message_ts")
+
         say(
             f"<@{user_id}> requested unanswered list for survey ID: `{survey_id}`",
             thread_ts=thread_ts,
         )
-        # TODO: Implement actual unanswered users logic
+
+        async def get_unanswered_users():
+            async with async_session_maker() as session:
+                sent_messages = await survey_sent_message_manager.get_sent_messages(
+                    survey_id=survey_id, session=session
+                )
+                sent_user_ids = {msg.receiver_slack_id for msg in sent_messages}
+                responses = await survey_response_manager.get_responses_by_survey(
+                    survey_id=survey_id, session=session
+                )
+                responded_user_ids = {r.responder_slack_id for r in responses}
+
+                unanswered_user_ids = sent_user_ids - responded_user_ids
+
+                if not unanswered_user_ids:
+                    say(
+                        "All users have responded to this survey!",
+                        thread_ts=thread_ts,
+                    )
+                    return
+
+                mentions = []
+                user_handler = UserHandler()
+                for s_id in unanswered_user_ids:
+                    user = await user_handler.get_user_by_slack_id(s_id)
+                    if user:
+                        mentions.append(f"@{user.username}")
+                    else:
+                        mentions.append(f"<@{s_id}>")
+
+                if mentions:
+                    say(
+                        f"Unanswered users: {' '.join(mentions)}",
+                        thread_ts=thread_ts,
+                    )
+                else:
+                    say(
+                        "No unanswered users found in records.",
+                        thread_ts=thread_ts,
+                    )
+
+        asyncio.run(get_unanswered_users())
 
     def handle_set_users_lists(self, ack, body, say):
         """Handle the Set Users lists button click."""
@@ -598,6 +638,38 @@ class SurveyHandler(BaseHandler):
                     await survey_response_manager.add_response(
                         response_data=survey_response_data, session=session
                     )
+
+                    survey = await survey_manager.get_survey_by_id(survey_id, session)
+                    if survey:
+                        response_block = SurveyResponseBlock(
+                            survey_id=survey.id,
+                            survey_name=survey.survey_name,
+                            question_text=survey.survey_text,
+                            is_submitted=True,
+                        )
+                        try:
+                            channel_id = body.get("container", {}).get("channel_id")
+                            ts = body.get("container", {}).get("message_ts")
+
+                            if channel_id and ts:
+                                self.app.client.chat_update(
+                                    channel=channel_id,
+                                    ts=ts,
+                                    blocks=response_block.build_with_submit(),
+                                    text=f"Survey: {survey.survey_name} (Answered)",
+                                )
+                                print(
+                                    f"[DEBUG] Successfully updated message {ts} in channel {channel_id}"
+                                )
+                            else:
+                                print(
+                                    f"[WARNING] Could not find channel_id or ts in body: {body.get('container')}"
+                                )
+
+                        except Exception as update_err:
+                            print(
+                                f"[ERROR] Failed to update message with checkmark: {update_err}"
+                            )
 
                 thread_ts = body["container"]["message_ts"]
                 say(text=f"Thanks for answer, <@{user_id}>", thread_ts=thread_ts)
