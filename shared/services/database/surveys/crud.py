@@ -44,6 +44,7 @@ class SurveyCRUDManager(BaseCRUDManager):
         """
         survey = Survey(
             survey_name=survey_data.survey_name,
+            survey_text=survey_data.survey_text,
             owner_slack_id=survey_data.owner_slack_id,
             owner_name=survey_data.owner_name,
             slack_id=survey_data.owner_slack_id,  # Required by Base model
