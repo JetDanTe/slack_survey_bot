@@ -13,7 +13,12 @@ from shared.services.database.surveys.crud import (
 
 class SurveyHandler:
     async def create_survey(
-        self, survey_name: str, survey_text: str, owner_slack_id: str, owner_name: str
+        self,
+        survey_name: str,
+        survey_text: str,
+        owner_slack_id: str,
+        owner_name: str,
+        reminder_interval_hours: float = 0,
     ) -> Survey:
         async with async_session_maker() as session:
             survey_data = SurveyCreate(
@@ -21,6 +26,7 @@ class SurveyHandler:
                 survey_text=survey_text,
                 owner_slack_id=owner_slack_id,
                 owner_name=owner_name,
+                reminder_interval_hours=reminder_interval_hours,
             )
             survey = await survey_manager.create_survey(
                 survey_data=survey_data, session=session

@@ -41,6 +41,31 @@ class SurveyCreationModal(BaseModel):
             },
         ]
 
+        blocks.append(
+            {
+                "type": "input",
+                "block_id": "survey_reminder_block",
+                "optional": True,
+                "label": {
+                    "type": "plain_text",
+                    "text": "Reminder Interval (hours)",
+                },
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "survey_reminder_input",
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "e.g. 24 (0 = no reminders)",
+                    },
+                    "initial_value": "0",
+                },
+                "hint": {
+                    "type": "plain_text",
+                    "text": "How often to send gentle reminders to users who haven't responded (0 to disable).",
+                },
+            }
+        )
+
         if self.user_lists:
             blocks.append(
                 {

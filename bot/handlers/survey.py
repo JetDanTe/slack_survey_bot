@@ -4,6 +4,7 @@ import typing as tp
 
 import pandas as pd
 from handlers.base import BaseHandler
+from services.reminder_service import ReminderService
 from services.slack_block_handler import (
     SurveyControlBlock,
     SurveyCreationModal,
@@ -43,6 +44,7 @@ class SurveyHandler(BaseHandler):
         self.app.action("survey_empty_2")(self.handle_survey_empty)
         self.app.action("survey_user_list_include")(self.handle_list_selection_change)
         self.app.action("survey_user_list_exclude")(self.handle_list_selection_change)
+        self.app.action("survey_remind_now")(self.handle_remind_now)
 
     def show_survey_manager(self, ack, body, say):
         ack()
@@ -85,6 +87,8 @@ class SurveyHandler(BaseHandler):
                 available_user_lists=user_lists,
                 current_users_incl=incl_ids,
                 current_users_excl=excl_ids,
+                reminder_interval_hours=s.reminder_interval_hours or 0,
+                reminders_sent_count=s.reminders_sent_count or 0,
             )
 
             say(
@@ -193,12 +197,24 @@ class SurveyHandler(BaseHandler):
         users_incl = ",".join(incl_ids) if incl_ids else None
         users_excl = ",".join(excl_ids) if excl_ids else None
 
+        reminder_interval_hours = 0
+        if "survey_reminder_block" in values and values["survey_reminder_block"][
+            "survey_reminder_input"
+        ].get("value"):
+            try:
+                reminder_interval_hours = float(
+                    values["survey_reminder_block"]["survey_reminder_input"]["value"]
+                )
+            except (ValueError, TypeError):
+                reminder_interval_hours = 0
+
         survey = asyncio.run(
             Sh().create_survey(
                 survey_name=survey_name,
                 survey_text=survey_text,
                 owner_slack_id=user_id,
                 owner_name=body["user"]["name"],
+                reminder_interval_hours=reminder_interval_hours,
             )
         )
 
@@ -218,6 +234,7 @@ class SurveyHandler(BaseHandler):
             available_user_lists=all_lists,
             current_users_incl=incl_ids,
             current_users_excl=excl_ids,
+            reminder_interval_hours=reminder_interval_hours,
         )
 
         target_channel = channel_id if channel_id else user_id
@@ -560,6 +577,26 @@ class SurveyHandler(BaseHandler):
             await survey_manager.update_survey_moderation_lists(
                 survey_id, users_incl, users_excl, session
             )
+
+    def handle_remind_now(self, ack, body, say):
+        """Handle the Remind Now button click - send immediate reminder."""
+        ack()
+        survey_id = int(body["actions"][0]["value"])
+        user_id = body["user"]["id"]
+        thread_ts = body["container"].get("message_ts")
+
+        say(
+            f"<@{user_id}> triggered an immediate reminder for survey ID: `{survey_id}`",
+            thread_ts=thread_ts,
+        )
+
+        reminder_service = ReminderService(self.app)
+        asyncio.run(reminder_service.send_immediate_reminder(survey_id))
+
+        say(
+            f"Reminder sent for survey `{survey_id}`! :bell:",
+            thread_ts=thread_ts,
+        )
 
     def handle_survey_empty(self, ack, body, say):
         """Handle empty button clicks (placeholder for future functionality)."""
