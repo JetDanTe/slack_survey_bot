@@ -41,6 +41,11 @@ class UsersListsHandler:
         async with async_session_maker() as session:
             await user_list_manager.remove_members(list_id, slack_ids, session)
 
+    async def delete_user_list(self, list_id: int) -> bool:
+        """Delete a user list and all its members."""
+        async with async_session_maker() as session:
+            return await user_list_manager.delete_user_list(list_id, session)
+
     async def ensure_default_lists(self) -> None:
         """
         Verify that default user lists exist, creating them if necessary.

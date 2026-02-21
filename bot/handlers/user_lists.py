@@ -25,6 +25,8 @@ class UserListHandler(BaseHandler):
         )
         self.app.action("user_list_select")(self.handle_user_list_selection)
         self.app.action("user_list_update")(self.handle_user_list_update_click)
+        self.app.action("user_list_view")(self.handle_user_list_view)
+        self.app.action("user_list_delete")(self.handle_user_list_delete)
         self.app.action("user_list_create")(self.handle_user_list_create)
         self.app.view("user_list_update_modal")(self.handle_user_list_update_submit)
 
@@ -175,6 +177,102 @@ class UserListHandler(BaseHandler):
             print(f"[ERROR] Failed to open update modal: {e}")
             thread_ts = body.get("container", {}).get("message_ts")
             say(f"Error opening update modal: {e}", thread_ts=thread_ts)
+
+    def _get_selected_list_id(self, body):
+        """Helper to get the selected list ID from the state values."""
+        state_values = body.get("state", {}).get("values", {})
+        for block_id, block_values in state_values.items():
+            for action_id, action_value in block_values.items():
+                if action_id == "user_list_select":
+                    selected_option = action_value.get("selected_option")
+                    if selected_option:
+                        return selected_option["value"]
+        return None
+
+    def handle_user_list_view(self, ack, body, say):
+        """Handle the View Members button click."""
+        ack()
+        thread_ts = body.get("container", {}).get("message_ts")
+        selected_list_id = self._get_selected_list_id(body)
+
+        if not selected_list_id or selected_list_id == "none":
+            say("Please select a user list first.", thread_ts=thread_ts)
+            return
+
+        try:
+            list_id = int(selected_list_id)
+            user_list = asyncio.run(Ulm().get_user_list_with_members(list_id))
+
+            if not user_list:
+                say("User list not found.", thread_ts=thread_ts)
+                return
+
+            if not user_list.members:
+                say(f"List `{user_list.name}` is empty.", thread_ts=thread_ts)
+                return
+
+            mentions = []
+            for m in user_list.members:
+                if m.slack_id:
+                    mentions.append(f"<@{m.slack_id}>")
+
+            say(
+                f"*Members of `{user_list.name}`* ({len(mentions)} total):\n"
+                + " ".join(mentions),
+                thread_ts=thread_ts,
+            )
+        except Exception as e:
+            print(f"[ERROR] Failed to view members: {e}")
+            say(f"Error viewing members: {e}", thread_ts=thread_ts)
+
+    def handle_user_list_delete(self, ack, body, say):
+        """Handle the Delete List button click."""
+        ack()
+        thread_ts = body.get("container", {}).get("message_ts")
+        channel_id = body.get("channel", {}).get("id") or body.get("container", {}).get(
+            "channel_id"
+        )
+        selected_list_id = self._get_selected_list_id(body)
+
+        if not selected_list_id or selected_list_id == "none":
+            say("Please select a user list first.", thread_ts=thread_ts)
+            return
+
+        try:
+            list_id = int(selected_list_id)
+            # Fetch name before deletion for the confirmation message
+            user_list = asyncio.run(Ulm().get_user_list_with_members(list_id))
+            if not user_list:
+                say("User list not found.", thread_ts=thread_ts)
+                return
+
+            list_name = user_list.name
+
+            # Perform deletion
+            success = asyncio.run(Ulm().delete_user_list(list_id))
+
+            if success:
+                say(
+                    f":wastebasket: User list `{list_name}` was successfully deleted.",
+                    thread_ts=thread_ts,
+                )
+
+                # Refresh the control panel UI
+                user_lists = asyncio.run(Ulm().get_all_surveys())
+                control_block = UsersListsControlBlock(user_lists=user_lists)
+
+                self.app.client.chat_update(
+                    channel=channel_id,
+                    ts=thread_ts,
+                    text="User lists:",
+                    blocks=control_block.build(),
+                )
+            else:
+                say(f"Could not delete list `{list_name}`.", thread_ts=thread_ts)
+
+        except Exception as e:
+            print(f"[ERROR] Failed to delete list: {e}")
+            say(f"Error deleting list: {e}", thread_ts=thread_ts)
 
     def handle_user_list_update_submit(self, ack, body, view, say):
         """Handle the Update modal submission."""

@@ -6,7 +6,7 @@ Provides async CRUD operations for UserList and UserListMember models.
 
 from typing import List, Optional
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -189,6 +189,24 @@ class UserListCRUDManager(BaseCRUDManager):
         except Exception as e:
             await session.rollback()
             raise Exception(f"Error removing members: {e}")
+
+    async def delete_user_list(self, list_id: int, session: AsyncSession) -> bool:
+        """Delete a user list and its members explicitly to avoid Foreign Key errors in bulk deletes."""
+        try:
+            # Explicitly delete members first to satisfy foreign key constraints
+            await session.execute(
+                delete(UserListMember).where(UserListMember.user_list_id == list_id)
+            )
+
+            # Then delete the list itself
+            result = await session.execute(
+                delete(UserList).where(UserList.id == list_id)
+            )
+            await session.commit()
+            return result.rowcount > 0
+        except Exception as e:
+            await session.rollback()
+            raise Exception(f"Error deleting user list: {e}")
 
 
 # Singleton instance
