@@ -2,7 +2,7 @@ services:
   slack_survey_bot:
     build:
       dockerfile: Dockerfile
-      context: ./bot
+      context: .
     restart: on-failure:3
     env_file:
       - .env
@@ -11,8 +11,10 @@ services:
       - ./shared:/app/shared
     command: |
       sh -c "
+      cd bot && \
       alembic upgrade head && \
-      python3 main.py
+      cd .. && \
+      python3 bot/main.py
       "
     networks:
       - main_network
