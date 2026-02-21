@@ -17,6 +17,7 @@ class BaseHandler(ABC):
         """
         self.bot = bot
         self.app = bot.app
+        self.logger = bot.logger.bind(handler=self.__class__.__name__)
 
     @abstractmethod
     def register(self):
