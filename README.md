@@ -17,6 +17,7 @@ A powerful, asynchronous Slack bot built with Python, Slack Bolt, and SQLAlchemy
 ## 🛠️ Technology Stack
 
 - **Python 3.12+**
+- **Docker Base Image**: `python:3.12-slim`
 - **Slack Bolt** for app framework and Socket Mode.
 - **SQLAlchemy (Async)** & **asyncpg** for ORM and database interactions.
 - **Alembic** for automated database migrations.

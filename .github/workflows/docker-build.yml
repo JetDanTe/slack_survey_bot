@@ -4,9 +4,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - 'main'
-      - 'develop'
 
 env:
   IMAGE_NAME: jetdante/slack_survey_bot
@@ -40,14 +37,8 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            # Tag as 'latest' and version on tag push (v*.*.*)
             type=semver,pattern={{version}}
-            # Tag as 'latest' on push to main
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            # Tag as 'develop' on push to develop
-            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
-            # Optionally also tag as 'dev' on push to develop
-            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=raw,value=latest
 
       - name: Build & Push docker image
         uses: docker/build-push-action@v5
