@@ -19,7 +19,7 @@ WORKDIR /app/bot
 RUN poetry install --no-ansi --no-root --no-interaction
 
 WORKDIR /app
-COPY bot/ /app/bot/
-COPY shared/ /app/shared/
+COPY bot /app/bot
+COPY shared /app/shared
 
 CMD ["python", "bot/main.py"]
