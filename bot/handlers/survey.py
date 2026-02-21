@@ -451,14 +451,7 @@ class SurveyHandler(BaseHandler):
                     )
                     return
 
-                mentions = []
-                user_handler = UserHandler()
-                for s_id in unanswered_user_ids:
-                    user = await user_handler.get_user_by_slack_id(s_id)
-                    if user:
-                        mentions.append(f"@{user.username}")
-                    else:
-                        mentions.append(f"<@{s_id}>")
+                mentions = [f"<@{s_id}>" for s_id in unanswered_user_ids]
 
                 if mentions:
                     say(
