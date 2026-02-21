@@ -1,6 +1,5 @@
-from slack_bot import AuditBot
-
+from slack_bot import SurveyBot
 
 if __name__ == "__main__":
-    bot = AuditBot(debug=False)
+    bot = SurveyBot()
     bot.start()
