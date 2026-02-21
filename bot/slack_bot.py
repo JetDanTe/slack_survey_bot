@@ -11,10 +11,13 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from shared.services.settings.main import settings
+from shared.utils.logger import get_logger, setup_logger
 
 
 class SurveyBot:
     def __init__(self):
+        setup_logger()
+        self.logger = get_logger("SurveyBot")
         self.debug = settings.DEBUG
         self.app = App(token=settings.SLACK_BOT_TOKEN)
 
@@ -79,8 +82,8 @@ class SurveyBot:
 
     def start(self):
         """Connects to Slack in socket mode"""
-        print(
-            f"[INFO] Starting bot in {'DEBUG' if self.debug else 'PRODUCTION'} mode..."
+        self.logger.info(
+            f"Starting bot in {'DEBUG' if self.debug else 'PRODUCTION'} mode..."
         )
         self.reminder_service.start()
         self.handler.start()

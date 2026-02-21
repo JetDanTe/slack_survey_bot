@@ -68,10 +68,14 @@ class SurveyHandler(BaseHandler):
                                 channel=channel_id, ts=msg["ts"]
                             )
                         except Exception as e:
-                            print(f"[ERROR] Failed to delete message {msg['ts']}: {e}")
+                            self.logger.error(
+                                "failed_to_delete_message", error=str(e), ts=msg["ts"]
+                            )
 
         except Exception as e:
-            print(f"[ERROR] Error cleaning up old messages: {e}")
+            self.logger.error(
+                "failed_to_cleanup_old_messages", error=str(e), channel_id=channel_id
+            )
 
         surveys = asyncio.run(Sh().get_active_surveys())
         for s in surveys:
@@ -102,6 +106,9 @@ class SurveyHandler(BaseHandler):
         owner_id = body.get("user_id")
         owner_name = body.get("user_name")
         ack()
+        self.logger.info(
+            "survey_started", user_id=owner_id, survey_name=audit_message[0]
+        )
 
         survey = asyncio.run(
             Sh().create_survey(
@@ -165,6 +172,8 @@ class SurveyHandler(BaseHandler):
 
         survey_name = values["survey_name_block"]["survey_name_input"]["value"]
         survey_text = values["survey_text_block"]["survey_text_input"]["value"]
+
+        self.logger.info("survey_created", user_id=user_id, survey_name=survey_name)
 
         incl_ids = []
         if (
@@ -251,6 +260,8 @@ class SurveyHandler(BaseHandler):
         survey_id = body["actions"][0]["value"]
         user_id = body["user"]["id"]
         thread_ts = body["container"].get("message_ts")
+
+        self.logger.info("survey_start_clicked", user_id=user_id, survey_id=survey_id)
         say(
             f"<@{user_id}> clicked Start for survey ID: `{survey_id}`",
             thread_ts=thread_ts,
@@ -280,9 +291,11 @@ class SurveyHandler(BaseHandler):
                     )
                     target_users.difference_update(members)
 
-                print(f"[DEBUG] Target users after exclusion: {target_users}")
+                self.logger.debug(
+                    "target_users_after_exclusion", target_users=target_users
+                )
                 if self.bot.debug:
-                    print(f"[DEBUG] Bot Admins: {self.bot.admins}")
+                    self.logger.debug("bot_admins", admins=self.bot.admins)
 
                 response_block = SurveyResponseBlock(
                     survey_id=survey.id,
@@ -295,8 +308,8 @@ class SurveyHandler(BaseHandler):
                 for target_user in target_users:
                     if self.bot.debug:
                         if target_user not in self.bot.admins:
-                            print(
-                                f"[DEBUG] Skipping survey for non-admin user {target_user}"
+                            self.logger.debug(
+                                "skipping_survey_for_non_admin", target_user=target_user
                             )
                             continue
 
@@ -306,8 +319,10 @@ class SurveyHandler(BaseHandler):
                             blocks=blocks,
                             text=f"Survey: {survey.survey_name}",
                         )
-                        print(
-                            f"Message sent to user {target_user} for survey {survey.id}"
+                        self.logger.info(
+                            "message_sent_to_user",
+                            target_user=target_user,
+                            survey_id=survey.id,
                         )
                         sent_count += 1
 
@@ -320,7 +335,11 @@ class SurveyHandler(BaseHandler):
                             session=session,
                         )
                     except Exception as e:
-                        print(f"Error sending to {target_user}: {e}")
+                        self.logger.error(
+                            "error_sending_to_user",
+                            error=str(e),
+                            target_user=target_user,
+                        )
 
                 say(
                     f"Survey '{survey.survey_name}' started! Sent to {sent_count} users.",
@@ -336,6 +355,8 @@ class SurveyHandler(BaseHandler):
         user_id = body["user"]["id"]
         thread_ts = body["container"].get("message_ts")
         channel_id = body["container"].get("channel_id")
+
+        self.logger.info("survey_stop_clicked", user_id=user_id, survey_id=survey_id)
 
         async def stop_survey():
             try:
@@ -375,7 +396,9 @@ class SurveyHandler(BaseHandler):
                                 initial_comment=f"Here are the results for survey '{survey.survey_name}'",
                             )
                         except Exception as e:
-                            print(f"[ERROR] Failed to upload survey results: {e}")
+                            self.logger.error(
+                                "failed_to_upload_survey_results", error=str(e)
+                            )
                             say(
                                 f"Failed to upload survey results: {e}",
                                 thread_ts=thread_ts,
@@ -388,7 +411,9 @@ class SurveyHandler(BaseHandler):
                     try:
                         self.app.client.chat_delete(channel=channel_id, ts=thread_ts)
                     except Exception as e:
-                        print(f"[ERROR] Failed to delete survey control panel: {e}")
+                        self.logger.error(
+                            "failed_to_delete_survey_control_panel", error=str(e)
+                        )
 
                     async with async_session_maker() as session:
                         sent_messages = (
@@ -402,8 +427,10 @@ class SurveyHandler(BaseHandler):
                                     channel=msg.receiver_slack_id, ts=msg.message_ts
                                 )
                             except Exception as e:
-                                print(
-                                    f"[ERROR] Failed to delete message for user {msg.receiver_slack_id}: {e}"
+                                self.logger.error(
+                                    "failed_to_delete_message",
+                                    error=str(e),
+                                    receiver_slack_id=msg.receiver_slack_id,
                                 )
 
                 else:
@@ -425,6 +452,9 @@ class SurveyHandler(BaseHandler):
         survey_id = int(body["actions"][0]["value"])
         user_id = body["user"]["id"]
         thread_ts = body["container"].get("message_ts")
+        self.logger.info(
+            "survey_unanswered_requested", user_id=user_id, survey_id=survey_id
+        )
 
         say(
             f"<@{user_id}> requested unanswered list for survey ID: `{survey_id}`",
@@ -472,6 +502,7 @@ class SurveyHandler(BaseHandler):
         user_id = body["user"]["id"]
         survey_id = int(body["actions"][0]["value"])
         thread_ts = body["container"].get("message_ts")
+        self.logger.info("survey_set_users_lists", user_id=user_id, survey_id=survey_id)
 
         state_values = body.get("state", {}).get("values", {})
 
@@ -537,7 +568,7 @@ class SurveyHandler(BaseHandler):
                     break
 
         if survey_id is None:
-            print("[ERROR] Could not determine survey_id from message blocks.")
+            self.logger.error("could_not_determine_survey_id")
             return
 
         state_values = body.get("state", {}).get("values", {})
@@ -577,6 +608,7 @@ class SurveyHandler(BaseHandler):
         survey_id = int(body["actions"][0]["value"])
         user_id = body["user"]["id"]
         thread_ts = body["container"].get("message_ts")
+        self.logger.info("survey_remind_now", user_id=user_id, survey_id=survey_id)
 
         say(
             f"<@{user_id}> triggered an immediate reminder for survey ID: `{survey_id}`",
@@ -597,6 +629,9 @@ class SurveyHandler(BaseHandler):
         survey_id = body["actions"][0]["value"]
         action_id = body["actions"][0]["action_id"]
         thread_ts = body["container"].get("message_ts")
+        self.logger.info(
+            "survey_empty_clicked", survey_id=survey_id, action_id=action_id
+        )
         say(
             f"Empty button `{action_id}` clicked for survey ID: `{survey_id}` (not implemented)",
             thread_ts=thread_ts,
@@ -615,12 +650,19 @@ class SurveyHandler(BaseHandler):
             users = self.app.client.users_list()["members"]
             result = asyncio.run(UserHandler().update_users(users))
 
+            self.logger.info(
+                "users_updated",
+                created=result["created"],
+                updated=result["updated"],
+                errors=result["errors"],
+            )
             self.bot.common_handler.safe_say(
                 receiver=body.get("event").get("user"),
                 message=f"Users updated successfully.\nCreated: {result['created']}\nUpdated: {result['updated']}\nErrors: {result['errors']}",
                 say_func=say,
             )
         except Exception as e:
+            self.logger.error("failed_to_update_users", error=str(e))
             self.bot.common_handler.safe_say(
                 receiver=body.get("event").get("user"),
                 message=f"Failed to update users: {e}",
@@ -652,6 +694,11 @@ class SurveyHandler(BaseHandler):
                     if await survey_response_manager.check_user_responded(
                         survey_id, user_id, session
                     ):
+                        self.logger.info(
+                            "user_already_responded",
+                            user_id=user_id,
+                            survey_id=survey_id,
+                        )
                         thread_ts = body["container"]["message_ts"]
                         say(
                             text=f"You have already responded to this survey, <@{user_id}>",
@@ -688,30 +735,38 @@ class SurveyHandler(BaseHandler):
                                     blocks=response_block.build_with_submit(),
                                     text=f"Survey: {survey.survey_name} (Answered)",
                                 )
-                                print(
-                                    f"[DEBUG] Successfully updated message {ts} in channel {channel_id}"
+                                self.logger.debug(
+                                    "successfully_updated_message",
+                                    ts=ts,
+                                    channel_id=channel_id,
                                 )
                             else:
-                                print(
-                                    f"[WARNING] Could not find channel_id or ts in body: {body.get('container')}"
+                                self.logger.warning(
+                                    "could_not_find_channel_id_or_ts",
+                                    body_container=body.get("container"),
                                 )
 
                         except Exception as update_err:
-                            print(
-                                f"[ERROR] Failed to update message with checkmark: {update_err}"
+                            self.logger.error(
+                                "failed_to_update_message_with_checkmark",
+                                error=str(update_err),
                             )
 
                 thread_ts = body["container"]["message_ts"]
                 say(text=f"Thanks for answer, <@{user_id}>", thread_ts=thread_ts)
-                print(f"User {user_name} ({user_id}) answered survey {survey_id}")
+                self.logger.info(
+                    "user_answered_survey", user_id=user_id, survey_id=survey_id
+                )
 
             except Exception as e:
-                print(f"Error saving response: {e}")
+                self.logger.error("error_saving_response", error=str(e))
 
                 if self.bot.debug:
                     receiver_name = user_name
-                    print(
-                        f'[DEBUG] Would say: "Error saving response: {e}" to {receiver_name}'
+                    self.logger.debug(
+                        "would_say_error_saving_response",
+                        error=str(e),
+                        receiver_name=receiver_name,
                     )
                 else:
                     say(

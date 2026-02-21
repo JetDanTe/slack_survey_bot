@@ -50,10 +50,14 @@ class UserListHandler(BaseHandler):
                                 channel=channel_id, ts=msg["ts"]
                             )
                         except Exception as e:
-                            print(f"[ERROR] Failed to delete message {msg['ts']}: {e}")
+                            self.logger.error(
+                                "failed_to_delete_message", error=str(e), ts=msg["ts"]
+                            )
 
         except Exception as e:
-            print(f"[ERROR] Error cleaning up old messages: {e}")
+            self.logger.error(
+                "failed_to_cleanup_old_messages", error=str(e), channel_id=channel_id
+            )
 
         user_lists = asyncio.run(Ulm().get_all_surveys())
         control_block = UsersListsControlBlock(user_lists=user_lists)
@@ -84,6 +88,11 @@ class UserListHandler(BaseHandler):
             say("Please enter a name for the new list.", thread_ts=thread_ts)
             return
 
+        user_id = body.get("user", {}).get("id")
+        self.logger.info(
+            "creating_user_list", user_id=user_id, new_list_name=new_list_name
+        )
+
         try:
             asyncio.run(Ulm().create_user_list(name=new_list_name))
 
@@ -104,7 +113,9 @@ class UserListHandler(BaseHandler):
             )
 
         except Exception as e:
-            print(f"[ERROR] Failed to create user list: {e}")
+            self.logger.error(
+                "failed_to_create_user_list", error=str(e), new_list_name=new_list_name
+            )
             say(f"Error creating user list: {e}", thread_ts=thread_ts)
 
     def handle_user_list_selection(self, ack, body, say):
@@ -118,6 +129,14 @@ class UserListHandler(BaseHandler):
             ).get("channel_id")
             if channel_id:
                 self._selected_user_lists[channel_id] = list_id
+
+            user_id = body.get("user", {}).get("id")
+            self.logger.info(
+                "user_list_selected",
+                user_id=user_id,
+                list_id=list_id,
+                channel_id=channel_id,
+            )
 
     def handle_user_list_update_click(self, ack, body, say):
         """Handle the Update button click - opens modal."""
@@ -171,8 +190,14 @@ class UserListHandler(BaseHandler):
                 trigger_id=trigger_id,
                 view=modal.build(),
             )
+            user_id = body.get("user", {}).get("id")
+            self.logger.info(
+                "user_list_update_modal_opened", user_id=user_id, list_id=list_id
+            )
         except Exception as e:
-            print(f"[ERROR] Failed to open update modal: {e}")
+            self.logger.error(
+                "failed_to_open_update_modal", error=str(e), list_id=selected_list_id
+            )
             thread_ts = body.get("container", {}).get("message_ts")
             say(f"Error opening update modal: {e}", thread_ts=thread_ts)
 
@@ -209,6 +234,13 @@ class UserListHandler(BaseHandler):
 
             asyncio.run(Ulm().update_list_members(list_id, selected_users, user_names))
 
+            self.logger.info(
+                "updated_user_list_members",
+                user_id=user_id,
+                list_id=list_id,
+                num_members=len(selected_users),
+            )
+
             if target_channel and target_thread:
                 self.app.client.chat_postMessage(
                     channel=target_channel,
@@ -221,7 +253,9 @@ class UserListHandler(BaseHandler):
                     text=f"User list updated! {len(selected_users)} members set.",
                 )
         except Exception as e:
-            print(f"[ERROR] Failed to update list members: {e}")
+            self.logger.error(
+                "failed_to_update_list_members", error=str(e), list_id=list_id
+            )
             if target_channel and target_thread:
                 self.app.client.chat_postMessage(
                     channel=target_channel,
