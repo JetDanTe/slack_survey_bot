@@ -97,16 +97,37 @@ class UsersListsControlBlock(BaseModel):
         }
 
     def _build_actions(self) -> dict:
-        """Build actions block with Update button."""
+        """Build actions block with Update, View, and Delete buttons."""
         return {
             "type": "actions",
             "block_id": "user_list_actions_block",
             "elements": [
+                self._button("View Members", "user_list_view"),
                 self._button("Update Members", "user_list_update", style="primary"),
+                self._button(
+                    "Delete List",
+                    "user_list_delete",
+                    style="danger",
+                    confirm={
+                        "title": {"type": "plain_text", "text": "Are you sure?"},
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "This action cannot be undone. This list and all its member mappings will be permanently deleted.",
+                        },
+                        "confirm": {"type": "plain_text", "text": "Yes, delete list"},
+                        "deny": {"type": "plain_text", "text": "Cancel"},
+                    },
+                ),
             ],
         }
 
-    def _button(self, text: str, action_id: str, style: str | None = None) -> dict:
+    def _button(
+        self,
+        text: str,
+        action_id: str,
+        style: str | None = None,
+        confirm: dict | None = None,
+    ) -> dict:
         """Build a button element."""
         button = {
             "type": "button",
@@ -115,6 +136,8 @@ class UsersListsControlBlock(BaseModel):
         }
         if style:
             button["style"] = style
+        if confirm:
+            button["confirm"] = confirm
         return button
 
     def _user_list_dropdown(self) -> dict:
