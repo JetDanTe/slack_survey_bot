@@ -106,19 +106,21 @@ class ReminderService:
                 return
 
             reminder_count = (survey.reminders_sent_count or 0) + 1
-            reminder_text = (
-                f":bell: *Gentle Reminder*\n\n"
-                f"Hi! This is a friendly reminder to complete the survey "
-                f"*{survey.survey_name}*.\n\n"
-                f"Please take a moment to provide your response. "
-                f"Thank you! :pray:"
-            )
 
             sent_count = 0
             for user_id in unanswered_user_ids:
                 original_msg_ts = user_message_map.get(user_id)
                 if not original_msg_ts:
                     continue
+
+                reminder_text = (
+                    f":bell: *Gentle Reminder*\n\n"
+                    f"Hi <@{user_id}>! This is a friendly reminder to complete the survey "
+                    f"*{survey.survey_name}*.\n\n"
+                    f"Please take a moment to provide your response. "
+                    f"Thank you! :pray:"
+                )
+
                 try:
                     self.app.client.chat_postMessage(
                         channel=user_id,
