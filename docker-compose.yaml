@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./bot:/app
+      - ./bot:/app/bot
       - ./shared:/app/shared
     command: |
       sh -c "
