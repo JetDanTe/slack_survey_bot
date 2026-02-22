@@ -27,7 +27,7 @@ class UserCRUD_Manager(BaseCRUDManager):
     async def get_active_users(self, session: AsyncSession) -> list[Slack_User]:
         from sqlalchemy import select
 
-        query = select(Slack_User).filter(not Slack_User.is_deleted)
+        query = select(Slack_User).filter(Slack_User.is_deleted.is_(False))
         result = await session.execute(query)
         return list(result.scalars().all())
 
