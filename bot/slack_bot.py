@@ -35,14 +35,14 @@ class SurveyBot:
         self.survey_handler.register()
         self.user_list_handler.register()
 
-        # Initialize User Lists
-        asyncio.run(self.initialize_user_lists())
-
         # Socket mode handler to connect the bot to Slack
         self.handler = SocketModeHandler(self.app, settings.SLACK_APP_TOKEN)
 
         # Sync users on startup
         asyncio.run(self.sync_slack_users())
+
+        # Initialize User Lists (uses fresh synced users)
+        asyncio.run(self.initialize_user_lists())
 
         # Initialize Reminder Service
         self.reminder_service = ReminderService(self.app)

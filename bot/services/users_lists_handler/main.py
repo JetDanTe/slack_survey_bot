@@ -48,9 +48,8 @@ class UsersListsHandler:
 
     async def ensure_default_lists(self) -> None:
         """
-        Verify that default user lists exist, creating them if necessary.
-        Currently handles:
-        - "all": Includes all active (non-deleted) users from the database.
+        Verify that default user lists exist, creating them if necessary,
+        and ensuring they are up-to-date with current active users.
         """
         from shared.services.database.users.crud import user_manager
 
@@ -62,13 +61,19 @@ class UsersListsHandler:
                 all_list = await self.create_user_list(
                     name="all", description="All active users"
                 )
-
-                active_users = await user_manager.get_active_users(session)
-
-                if active_users:
-                    slack_ids = [u.slack_id for u in active_users]
-                    user_names = [u.realname for u in active_users]
-                    await self.update_list_members(all_list.id, slack_ids, user_names)
-                    print(f"INFO: Added {len(slack_ids)} users to 'all' list.")
             else:
-                print("INFO: Default 'all' user list already exists.")
+                print(
+                    "INFO: Default 'all' user list already exists. Refreshing members..."
+                )
+
+            active_users = await user_manager.get_active_users(session)
+
+            if active_users:
+                slack_ids = [u.slack_id for u in active_users]
+                user_names = [u.realname for u in active_users]
+                await self.update_list_members(all_list.id, slack_ids, user_names)
+                print(f"INFO: Updated 'all' user list with {len(slack_ids)} users.")
+            else:
+                # If no active users, ensure the list is empty
+                await self.update_list_members(all_list.id, [], [])
+                print("INFO: 'all' user list cleared (no active users found).")
