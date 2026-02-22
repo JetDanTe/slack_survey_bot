@@ -50,29 +50,29 @@ class UserHandler:
                     "is_deleted": s_user.get("deleted", False),
                 }
 
-            try:
-                existing_user = await user_manager.get(
-                    session=session, field=Slack_User.slack_id, field_value=user_id
-                )
+                try:
+                    existing_user = await user_manager.get(
+                        session=session, field=Slack_User.slack_id, field_value=user_id
+                    )
 
-                if existing_user:
-                    update_data = {
-                        "username": user_data["username"],
-                        "realname": user_data["realname"],
-                        "is_deleted": user_data["is_deleted"],
-                    }
+                    if existing_user:
+                        update_data = {
+                            "username": user_data["username"],
+                            "realname": user_data["realname"],
+                            "is_deleted": user_data["is_deleted"],
+                        }
 
-                    await user_manager.update(session, existing_user, **update_data)
-                    updated_count += 1
-                else:
-                    user_data["is_ignore"] = False
-                    new_user = Slack_User(**user_data)
-                    await user_manager.create_user(new_user, session)
-                    created_count += 1
+                        await user_manager.update(session, existing_user, **update_data)
+                        updated_count += 1
+                    else:
+                        user_data["is_ignore"] = False
+                        new_user = Slack_User(**user_data)
+                        await user_manager.create_user(new_user, session)
+                        created_count += 1
 
-            except Exception as e:
-                print(f"Error processing user {user_id}: {e}")
-                errors.append(user_id)
+                except Exception as e:
+                    print(f"Error processing user {user_id}: {e}")
+                    errors.append(user_id)
 
         return {
             "created": created_count,
